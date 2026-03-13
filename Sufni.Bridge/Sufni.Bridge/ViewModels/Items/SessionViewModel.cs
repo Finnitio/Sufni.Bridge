@@ -41,6 +41,7 @@ public partial class SessionViewModel : ItemViewModelBase
             return false;
         }
 
+        SpringPage.TravelComparisonHistogram = cache.TravelComparisonHistogram;
         SpringPage.FrontTravelHistogram = cache.FrontTravelHistogram;
         SpringPage.RearTravelHistogram = cache.RearTravelHistogram;
 
@@ -85,6 +86,21 @@ public partial class SessionViewModel : ItemViewModelBase
         {
             SessionId = Id
         };
+
+        if (telemetryData.Front.Present && telemetryData.Rear.Present)
+        {
+            var tcmp = new TravelHistogramComparisonPlot(new Plot());
+            tcmp.LoadTelemetryData(telemetryData);
+            sessionCache.TravelComparisonHistogram = tcmp.Plot.GetSvgXml(width, height);
+            Dispatcher.UIThread.Post(() =>
+            {
+                SpringPage.TravelComparisonHistogram = sessionCache.TravelComparisonHistogram;
+            });
+        }
+        else
+        {
+            Dispatcher.UIThread.Post(() => { SpringPage.TravelComparisonHistogram = null; });
+        }
 
         if (telemetryData.Front.Present)
         {
@@ -278,6 +294,34 @@ public partial class SessionViewModel : ItemViewModelBase
             if (!await LoadCache())
             {
                 await CreateCache(bounds);
+            }
+
+            if (SpringPage.TravelComparisonHistogram is null)
+            {
+                var databaseService = App.Current?.Services?.GetService<IDatabaseService>();
+                Debug.Assert(databaseService != null, nameof(databaseService) + " != null");
+
+                var telemetryData = await databaseService.GetSessionPsstAsync(Id);
+                if (telemetryData is not null && telemetryData.Front.Present && telemetryData.Rear.Present)
+                {
+                    var b = (Rect)bounds;
+                    var (width, height) = ((int)b.Width, (int)(b.Height / 2.0));
+
+                    var tcmp = new TravelHistogramComparisonPlot(new Plot());
+                    tcmp.LoadTelemetryData(telemetryData);
+                    SpringPage.TravelComparisonHistogram = tcmp.Plot.GetSvgXml(width, height);
+
+                    var cache = await databaseService.GetSessionCacheAsync(Id);
+                    if (cache is not null)
+                    {
+                        cache.TravelComparisonHistogram = SpringPage.TravelComparisonHistogram;
+                        await databaseService.PutSessionCacheAsync(cache);
+                    }
+                }
+                else
+                {
+                    SpringPage.TravelComparisonHistogram = null;
+                }
             }
         }
         catch (Exception e)

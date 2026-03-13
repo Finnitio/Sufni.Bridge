@@ -35,6 +35,14 @@ public record HistogramData(List<double> Bins, List<double> Values);
 public record StackedHistogramData(List<double> Bins, List<double[]> Values);
 
 public record TravelStatistics(double Max, double Average, int Bottomouts);
+public record DetailedTravelStatistics(double Max, double Average, double P95, int Bottomouts);
+public record DetailedTravelHistogramData(
+    List<double> TravelMidsMm,
+    List<double> TravelMidsPercentage,
+    List<double> TimePercentage,
+    List<double> BarWidthsMm,
+    List<double> BarWidthsPercentage,
+    double MaxTravelMm);
 
 public record VelocityStatistics(
     double AverageRebound,
@@ -395,6 +403,72 @@ public class TelemetryData
             suspension.TravelBins.ToList().GetRange(0, suspension.TravelBins.Length), [.. hist]);
     }
 
+    public DetailedTravelHistogramData CalculateDetailedTravelHistogram(SuspensionType type)
+    {
+        var suspension = type == SuspensionType.Front ? Front : Rear;
+        var maxTravel = type == SuspensionType.Front ? Linkage.MaxFrontTravel : Linkage.MaxRearTravel;
+        var histLen = Math.Max(0, suspension.TravelBins.Length - 1);
+
+        var hist = new double[histLen];
+        var totalCount = 0.0;
+
+        foreach (var stroke in suspension.Strokes.Compressions.Concat(suspension.Strokes.Rebounds))
+        {
+            totalCount += stroke.Stat.Count;
+            foreach (var digitizedTravel in stroke.DigitizedTravel)
+            {
+                if (digitizedTravel >= 0 && digitizedTravel < histLen)
+                {
+                    hist[digitizedTravel] += 1;
+                }
+            }
+        }
+
+        if (totalCount > 0)
+        {
+            for (var i = 0; i < hist.Length; i++)
+            {
+                hist[i] = hist[i] / totalCount * 100.0;
+            }
+        }
+
+        var midsMm = new List<double>(histLen);
+        var midsPercentage = new List<double>(histLen);
+        var widthsMm = new List<double>(histLen);
+        var widthsPercentage = new List<double>(histLen);
+
+        if (histLen > 0 && maxTravel > 0)
+        {
+            const double percentageGap = 0.75;
+            var mmGap = percentageGap * maxTravel / 100.0;
+
+            for (var i = 0; i < histLen; i++)
+            {
+                var left = suspension.TravelBins[i];
+                var right = suspension.TravelBins[i + 1];
+                var widthMm = right - left;
+                var midMm = (left + right) / 2.0;
+
+                var widthPercentage = widthMm / maxTravel * 100.0;
+                var adjustedWidthPercentage = Math.Max(widthPercentage - percentageGap, widthPercentage * 0.1);
+                var adjustedWidthMm = Math.Max(widthMm - mmGap, widthMm * 0.1);
+
+                midsMm.Add(midMm);
+                midsPercentage.Add(midMm / maxTravel * 100.0);
+                widthsMm.Add(adjustedWidthMm);
+                widthsPercentage.Add(adjustedWidthPercentage);
+            }
+        }
+
+        return new DetailedTravelHistogramData(
+            midsMm,
+            midsPercentage,
+            [.. hist],
+            widthsMm,
+            widthsPercentage,
+            maxTravel);
+    }
+
     public StackedHistogramData CalculateVelocityHistogram(SuspensionType type)
     {
         var suspension = type == SuspensionType.Front ? Front : Rear;
@@ -493,6 +567,39 @@ public class TelemetryData
         }
 
         return new TravelStatistics(mx, sum / count, bo);
+    }
+
+    public DetailedTravelStatistics CalculateDetailedTravelStatistics(SuspensionType type)
+    {
+        var suspension = type == SuspensionType.Front ? Front : Rear;
+        var travelValues = new List<double>();
+
+        var bottomouts = 0;
+        foreach (var stroke in suspension.Strokes.Compressions.Concat(suspension.Strokes.Rebounds))
+        {
+            bottomouts += stroke.Stat.Bottomouts;
+
+            if (stroke.End < stroke.Start || stroke.Start < 0 || stroke.End >= suspension.Travel.Length)
+            {
+                continue;
+            }
+
+            for (var i = stroke.Start; i <= stroke.End; i++)
+            {
+                travelValues.Add(suspension.Travel[i]);
+            }
+        }
+
+        if (travelValues.Count == 0)
+        {
+            return new DetailedTravelStatistics(0.0, 0.0, 0.0, 0);
+        }
+
+        var average = travelValues.Average();
+        var max = travelValues.Max();
+        var p95 = travelValues.Percentile(95);
+
+        return new DetailedTravelStatistics(max, average, p95, bottomouts);
     }
 
     public VelocityStatistics CalculateVelocityStatistics(SuspensionType type)

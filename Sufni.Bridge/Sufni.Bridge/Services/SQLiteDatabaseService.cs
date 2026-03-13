@@ -136,6 +136,22 @@ public class SqLiteDatabaseService : IDatabaseService
         {
             await connection.QueryAsync<Synchronization>("INSERT INTO sync VALUES (0)");
         }
+
+        await EnsureSessionCacheColumns();
+    }
+
+    private async Task EnsureSessionCacheColumns()
+    {
+        var tableInfo = await connection.QueryAsync<TableInfoRecord>("PRAGMA table_info(session_cache)");
+        if (tableInfo.TrueForAll(column => column.Name != "travel_comparison_histogram"))
+        {
+            await connection.ExecuteAsync("ALTER TABLE session_cache ADD COLUMN travel_comparison_histogram TEXT");
+        }
+    }
+
+    private class TableInfoRecord
+    {
+        public string Name { get; set; } = string.Empty;
     }
 
     public async Task<List<Board>> GetBoardsAsync()
