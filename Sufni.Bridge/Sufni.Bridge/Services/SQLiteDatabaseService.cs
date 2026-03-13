@@ -138,6 +138,22 @@ public class SqLiteDatabaseService : IDatabaseService
         }
 
         await EnsureSessionCacheColumns();
+        await EnsureDefaultCalibrationMethods();
+    }
+
+    private async Task EnsureDefaultCalibrationMethods()
+    {
+        var existing = await connection.Table<CalibrationMethod>().ToListAsync();
+        var existingIds = existing.Select(m => m.Id).ToHashSet();
+        var timestamp = (int)DateTimeOffset.Now.ToUnixTimeSeconds();
+        foreach (var method in DefaultCalibrationMethods)
+        {
+            if (!existingIds.Contains(method.Id))
+            {
+                method.Updated = timestamp;
+                await connection.InsertAsync(method);
+            }
+        }
     }
 
     private async Task EnsureSessionCacheColumns()
