@@ -26,7 +26,7 @@ public class MassStorageTelemetryDataStore : ITelemetryDataStore
     {
         DriveInfo = driveInfo;
         Name = $"{driveInfo.VolumeLabel} ({DriveInfo.RootDirectory.Name})";
-        BoardId = File.ReadAllText($"{DriveInfo.RootDirectory.FullName}/BOARDID").ToLower();
+        BoardId = File.ReadAllText($"{DriveInfo.RootDirectory.FullName}/BOARDID").ToLower().Trim();
 
         if (!Directory.Exists($"{DriveInfo.RootDirectory.FullName}/uploaded"))
             Directory.CreateDirectory($"{DriveInfo.RootDirectory.FullName}/uploaded");

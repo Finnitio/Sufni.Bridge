@@ -70,9 +70,8 @@ public class StorageProviderTelemetryDataStore : ITelemetryDataStore
         if (boardIdFile is null) return;
 
         await using var stream = await boardIdFile.OpenReadAsync();
-        var buffer = new byte[16];
-        await stream.ReadExactlyAsync(buffer, 0, 16);
-        BoardId = Encoding.ASCII.GetString(buffer).ToLower();
+        using var reader = new System.IO.StreamReader(stream, Encoding.ASCII);
+        BoardId = (await reader.ReadToEndAsync()).ToLower().Trim();
     }
 
     public StorageProviderTelemetryDataStore(IStorageFolder folder)

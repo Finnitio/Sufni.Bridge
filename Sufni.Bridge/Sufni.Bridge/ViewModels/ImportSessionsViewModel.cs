@@ -72,7 +72,7 @@ public partial class ImportSessionsViewModel : ViewModelBase
         try
         {
             var boards = await databaseService.GetBoardsAsync();
-            var selectedBoard = boards.FirstOrDefault(b => b?.Id.ToLower() == value.BoardId, null);
+            var selectedBoard = boards.FirstOrDefault(b => b?.Id.ToLower().Trim() == value.BoardId?.Trim(), null);
             SelectedSetup = selectedBoard?.SetupId;
         }
         catch (Exception e)
@@ -151,7 +151,7 @@ public partial class ImportSessionsViewModel : ViewModelBase
         Debug.Assert(databaseService != null, nameof(databaseService) + " != null");
 
         var boards = await databaseService.GetBoardsAsync();
-        var selectedBoard = boards.FirstOrDefault(b => b?.Id.ToLower() == SelectedDataStore?.BoardId, null);
+        var selectedBoard = boards.FirstOrDefault(b => b?.Id.ToLower().Trim() == SelectedDataStore?.BoardId?.Trim(), null);
         SelectedSetup = selectedBoard?.SetupId;
     }
 
