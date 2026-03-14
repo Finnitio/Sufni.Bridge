@@ -14,7 +14,7 @@
         <vm:SpringPageViewModel />
     </Design.DataContext>
 
-    <ScrollViewer Width="{Binding $parent[ScrollViewer].Bounds.Width}" IsScrollChainingEnabled="False">
+    <ScrollViewer Width="{Binding $parent[ScrollViewer].Bounds.Width}" Height="{Binding $parent[ScrollViewer].Bounds.Height}" IsScrollChainingEnabled="False">
         <StackPanel Orientation="Vertical">
             <Svg IsVisible="{Binding TravelComparisonHistogram, Converter={x:Static ObjectConverters.IsNotNull}}" Source="{Binding TravelComparisonHistogram}" />
             <Svg IsVisible="{Binding FrontTravelHistogram, Converter={x:Static ObjectConverters.IsNotNull}}" Source="{Binding FrontTravelHistogram}" />

@@ -15,7 +15,7 @@
         <vm:DamperPageViewModel />
     </Design.DataContext>
 
-    <ScrollViewer Width="{Binding $parent[ScrollViewer].Bounds.Width}" IsScrollChainingEnabled="False">
+    <ScrollViewer Width="{Binding $parent[ScrollViewer].Bounds.Width}" Height="{Binding $parent[ScrollViewer].Bounds.Height}" IsScrollChainingEnabled="False">
         <StackPanel Orientation="Vertical">
             <!--  Front velocity histogram  -->
             <Grid ColumnDefinitions="* auto" IsVisible="{Binding FrontVelocityHistogram, Converter={x:Static ObjectConverters.IsNotNull}}">
