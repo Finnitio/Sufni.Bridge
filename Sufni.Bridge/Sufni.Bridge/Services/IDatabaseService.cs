@@ -40,6 +40,7 @@ public interface IDatabaseService
     public Task<Guid> PutSessionAsync(Session session);
     public Task PatchSessionPsstAsync(Guid id, byte[] data);
     public Task DeleteSessionAsync(Guid id);
+    public Task<bool> SessionExistsForTimestampAsync(int timestamp);
     public Task<SessionCache?> GetSessionCacheAsync(Guid sessionId);
     public Task<Guid> PutSessionCacheAsync(SessionCache sessionCache);
     public Task<int> GetLastSyncTimeAsync();

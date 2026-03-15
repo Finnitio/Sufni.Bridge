@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -24,6 +26,7 @@ public partial class SessionViewModel : ItemViewModelBase
     private DamperPageViewModel DamperPage { get; } = new();
     private BalancePageViewModel BalancePage { get; } = new();
     private MiscPageViewModel MiscPage { get; } = new();
+    private SummaryPageViewModel SummaryPage { get; } = new();
     private NotesPageViewModel NotesPage { get; } = new();
     public ObservableCollection<PageViewModelBase> Pages { get; }
     public string Description => NotesPage.Description ?? "";
@@ -43,6 +46,7 @@ public partial class SessionViewModel : ItemViewModelBase
         }
 
         SpringPage.TravelComparisonHistogram = cache.TravelComparisonHistogram;
+        SpringPage.FrontRearTravelScatter = cache.FrontRearTravelScatter;
         SpringPage.FrontTravelHistogram = cache.FrontTravelHistogram;
         SpringPage.RearTravelHistogram = cache.RearTravelHistogram;
 
@@ -102,10 +106,22 @@ public partial class SessionViewModel : ItemViewModelBase
             {
                 SpringPage.TravelComparisonHistogram = sessionCache.TravelComparisonHistogram;
             });
+
+            var frs = new FrontRearTravelScatterPlot(new Plot());
+            frs.LoadTelemetryData(telemetryData);
+            sessionCache.FrontRearTravelScatter = frs.Plot.GetSvgXml(width, height);
+            Dispatcher.UIThread.Post(() =>
+            {
+                SpringPage.FrontRearTravelScatter = sessionCache.FrontRearTravelScatter;
+            });
         }
         else
         {
-            Dispatcher.UIThread.Post(() => { SpringPage.TravelComparisonHistogram = null; });
+            Dispatcher.UIThread.Post(() =>
+            {
+                SpringPage.TravelComparisonHistogram = null;
+                SpringPage.FrontRearTravelScatter = null;
+            });
         }
 
         if (telemetryData.Front.Present)
@@ -208,6 +224,288 @@ public partial class SessionViewModel : ItemViewModelBase
         await databaseService.PutSessionCacheAsync(sessionCache);
     }
 
+    private sealed record SuspensionSummaryStats(
+        double MaxTravel,
+        double AvgTravel,
+        int Bottomouts,
+        double AvgCompression,
+        double MaxCompression,
+        double AvgRebound,
+        double MaxRebound);
+
+    private static string FormatTravel(double value, double maxTravel)
+    {
+        if (maxTravel <= 0)
+        {
+            return "-";
+        }
+
+        return string.Create(System.Globalization.CultureInfo.InvariantCulture,
+            $"{value / maxTravel * 100.0:0.0} % - {value:0.0} mm");
+    }
+
+    private static string FormatVelocity(double value)
+    {
+        return string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{value:0.0} mm/s");
+    }
+
+    private static string FormatBottomouts(int value) => $"{value} times";
+
+    private static double EvaluatePolynomial(IReadOnlyList<double> coefficients, double x)
+    {
+        var result = 0.0;
+        var power = 1.0;
+        for (var i = 0; i < coefficients.Count; i++)
+        {
+            result += coefficients[i] * power;
+            power *= x;
+        }
+        return result;
+    }
+
+    private static double EvaluateDerivative(IReadOnlyList<double> coefficients, double x)
+    {
+        var result = 0.0;
+        var power = 1.0;
+        for (var i = 1; i < coefficients.Count; i++)
+        {
+            result += i * coefficients[i] * power;
+            power *= x;
+        }
+        return result;
+    }
+
+    private static double SolveShockTravel(double wheelTravel, IReadOnlyList<double> coefficients, double maxShockStroke)
+    {
+        if (wheelTravel <= 0)
+        {
+            return 0.0;
+        }
+
+        var maxWheelTravel = EvaluatePolynomial(coefficients, maxShockStroke);
+        var x = maxWheelTravel > 0 ? wheelTravel / maxWheelTravel * maxShockStroke : 0.0;
+        x = Math.Clamp(x, 0.0, maxShockStroke);
+
+        for (var i = 0; i < 12; i++)
+        {
+            var f = EvaluatePolynomial(coefficients, x) - wheelTravel;
+            if (Math.Abs(f) < 1e-6)
+            {
+                break;
+            }
+
+            var df = EvaluateDerivative(coefficients, x);
+            if (Math.Abs(df) < 1e-6)
+            {
+                break;
+            }
+
+            x = Math.Clamp(x - f / df, 0.0, maxShockStroke);
+        }
+
+        return x;
+    }
+
+    private static SuspensionSummaryStats? BuildWheelStats(TelemetryData telemetryData, SuspensionType type)
+    {
+        var suspension = type == SuspensionType.Front ? telemetryData.Front : telemetryData.Rear;
+        if (!suspension.Present)
+        {
+            return null;
+        }
+
+        var travelStats = telemetryData.CalculateTravelStatistics(type);
+        var velocityStats = telemetryData.CalculateVelocityStatistics(type);
+        return new SuspensionSummaryStats(
+            travelStats.Max,
+            travelStats.Average,
+            travelStats.Bottomouts,
+            velocityStats.AverageCompression,
+            velocityStats.MaxCompression,
+            velocityStats.AverageRebound,
+            velocityStats.MaxRebound);
+    }
+
+    private static SuspensionSummaryStats? BuildShockStats(TelemetryData telemetryData)
+    {
+        if (!telemetryData.Rear.Present || !telemetryData.Linkage.MaxRearStroke.HasValue || telemetryData.Linkage.MaxRearStroke <= 0)
+        {
+            return null;
+        }
+
+        var maxShockStroke = telemetryData.Linkage.MaxRearStroke.Value;
+        var coeffs = telemetryData.Linkage.ShockWheelCoeffs;
+        var rearTravel = telemetryData.Rear.Travel;
+        var rearVelocity = telemetryData.Rear.Velocity;
+        var shockTravel = new double[rearTravel.Length];
+        var shockVelocity = new double[rearVelocity.Length];
+
+        for (var i = 0; i < rearTravel.Length; i++)
+        {
+            var s = SolveShockTravel(rearTravel[i], coeffs, maxShockStroke);
+            shockTravel[i] = s;
+            var derivative = EvaluateDerivative(coeffs, s);
+            shockVelocity[i] = Math.Abs(derivative) > 1e-6 ? rearVelocity[i] / derivative : 0.0;
+        }
+
+        double travelSum = 0.0;
+        var travelCount = 0;
+        double travelMax = 0.0;
+        double compressionSum = 0.0;
+        var compressionCount = 0;
+        double compressionMax = 0.0;
+        double reboundSum = 0.0;
+        var reboundCount = 0;
+        double reboundMax = 0.0;
+
+        foreach (var stroke in telemetryData.Rear.Strokes.Compressions.Concat(telemetryData.Rear.Strokes.Rebounds))
+        {
+            for (var i = stroke.Start; i <= stroke.End && i < shockTravel.Length; i++)
+            {
+                var t = shockTravel[i];
+                travelSum += t;
+                travelCount++;
+                if (t > travelMax)
+                {
+                    travelMax = t;
+                }
+            }
+        }
+
+        foreach (var stroke in telemetryData.Rear.Strokes.Compressions)
+        {
+            for (var i = stroke.Start; i <= stroke.End && i < shockVelocity.Length; i++)
+            {
+                var v = shockVelocity[i];
+                compressionSum += v;
+                compressionCount++;
+                if (v > compressionMax)
+                {
+                    compressionMax = v;
+                }
+            }
+        }
+
+        foreach (var stroke in telemetryData.Rear.Strokes.Rebounds)
+        {
+            for (var i = stroke.Start; i <= stroke.End && i < shockVelocity.Length; i++)
+            {
+                var v = shockVelocity[i];
+                reboundSum += v;
+                reboundCount++;
+                if (v < reboundMax)
+                {
+                    reboundMax = v;
+                }
+            }
+        }
+
+        var bottomouts = 0;
+        var threshold = maxShockStroke * 0.97;
+        for (var i = 0; i < shockTravel.Length; i++)
+        {
+            if (shockTravel[i] <= threshold)
+            {
+                continue;
+            }
+
+            bottomouts++;
+            while (i < shockTravel.Length && shockTravel[i] > threshold)
+            {
+                i++;
+            }
+        }
+
+        if (travelCount == 0)
+        {
+            return null;
+        }
+
+        return new SuspensionSummaryStats(
+            travelMax,
+            travelSum / travelCount,
+            bottomouts,
+            compressionCount > 0 ? compressionSum / compressionCount : 0.0,
+            compressionMax,
+            reboundCount > 0 ? reboundSum / reboundCount : 0.0,
+            reboundMax);
+    }
+
+    private void PopulateSummary(TelemetryData telemetryData)
+    {
+        var date = (Timestamp ?? DateTime.UnixEpoch).ToString("yyyy-MM-dd");
+        var time = (Timestamp ?? DateTime.UnixEpoch).ToString("HH:mm");
+        var sampleCount = Math.Max(telemetryData.Front.Travel?.Length ?? 0, telemetryData.Rear.Travel?.Length ?? 0);
+        var duration = telemetryData.SampleRate > 0
+            ? TimeSpan.FromSeconds(sampleCount / (double)telemetryData.SampleRate)
+            : TimeSpan.Zero;
+        var runDuration = duration.TotalHours >= 1
+            ? duration.ToString(@"h\:mm\:ss")
+            : duration.ToString(@"m\:ss");
+
+        SummaryPage.RunDataRows =
+        [
+            new SummaryValueRow("Date", date),
+            new SummaryValueRow("Time", time),
+            new SummaryValueRow("Run duration", $"{runDuration} s")
+        ];
+
+        var forkStats = BuildWheelStats(telemetryData, SuspensionType.Front);
+        var shockStats = BuildShockStats(telemetryData);
+        var frontWheelStats = BuildWheelStats(telemetryData, SuspensionType.Front);
+        var rearWheelStats = BuildWheelStats(telemetryData, SuspensionType.Rear);
+
+        SummaryPage.ForkShockRows =
+        [
+            new SummaryComparisonRow("Pos [AVG]",
+                forkStats is null ? "-" : FormatTravel(forkStats.AvgTravel, telemetryData.Linkage.MaxFrontTravel),
+                shockStats is null ? "-" : FormatTravel(shockStats.AvgTravel, telemetryData.Linkage.MaxRearStroke ?? 0)),
+            new SummaryComparisonRow("Pos [MAX]",
+                forkStats is null ? "-" : FormatTravel(forkStats.MaxTravel, telemetryData.Linkage.MaxFrontTravel),
+                shockStats is null ? "-" : FormatTravel(shockStats.MaxTravel, telemetryData.Linkage.MaxRearStroke ?? 0)),
+            new SummaryComparisonRow("Bottom out",
+                forkStats is null ? "-" : FormatBottomouts(forkStats.Bottomouts),
+                shockStats is null ? "-" : FormatBottomouts(shockStats.Bottomouts)),
+            new SummaryComparisonRow("Comp [AVG]",
+                forkStats is null ? "-" : FormatVelocity(forkStats.AvgCompression),
+                shockStats is null ? "-" : FormatVelocity(shockStats.AvgCompression)),
+            new SummaryComparisonRow("Comp [MAX]",
+                forkStats is null ? "-" : FormatVelocity(forkStats.MaxCompression),
+                shockStats is null ? "-" : FormatVelocity(shockStats.MaxCompression)),
+            new SummaryComparisonRow("Reb [AVG]",
+                forkStats is null ? "-" : FormatVelocity(forkStats.AvgRebound),
+                shockStats is null ? "-" : FormatVelocity(shockStats.AvgRebound)),
+            new SummaryComparisonRow("Reb [MAX]",
+                forkStats is null ? "-" : FormatVelocity(forkStats.MaxRebound),
+                shockStats is null ? "-" : FormatVelocity(shockStats.MaxRebound))
+        ];
+
+        SummaryPage.WheelRows =
+        [
+            new SummaryComparisonRow("Pos [AVG]",
+                frontWheelStats is null ? "-" : FormatTravel(frontWheelStats.AvgTravel, telemetryData.Linkage.MaxFrontTravel),
+                rearWheelStats is null ? "-" : FormatTravel(rearWheelStats.AvgTravel, telemetryData.Linkage.MaxRearTravel)),
+            new SummaryComparisonRow("Pos [MAX]",
+                frontWheelStats is null ? "-" : FormatTravel(frontWheelStats.MaxTravel, telemetryData.Linkage.MaxFrontTravel),
+                rearWheelStats is null ? "-" : FormatTravel(rearWheelStats.MaxTravel, telemetryData.Linkage.MaxRearTravel)),
+            new SummaryComparisonRow("Bottom out",
+                frontWheelStats is null ? "-" : FormatBottomouts(frontWheelStats.Bottomouts),
+                rearWheelStats is null ? "-" : FormatBottomouts(rearWheelStats.Bottomouts)),
+            new SummaryComparisonRow("Comp [AVG]",
+                frontWheelStats is null ? "-" : FormatVelocity(frontWheelStats.AvgCompression),
+                rearWheelStats is null ? "-" : FormatVelocity(rearWheelStats.AvgCompression)),
+            new SummaryComparisonRow("Comp [MAX]",
+                frontWheelStats is null ? "-" : FormatVelocity(frontWheelStats.MaxCompression),
+                rearWheelStats is null ? "-" : FormatVelocity(rearWheelStats.MaxCompression)),
+            new SummaryComparisonRow("Reb [AVG]",
+                frontWheelStats is null ? "-" : FormatVelocity(frontWheelStats.AvgRebound),
+                rearWheelStats is null ? "-" : FormatVelocity(rearWheelStats.AvgRebound)),
+            new SummaryComparisonRow("Reb [MAX]",
+                frontWheelStats is null ? "-" : FormatVelocity(frontWheelStats.MaxRebound),
+                rearWheelStats is null ? "-" : FormatVelocity(rearWheelStats.MaxRebound))
+        ];
+    }
+
     #endregion
 
     #region Constructors
@@ -216,14 +514,14 @@ public partial class SessionViewModel : ItemViewModelBase
     {
         session = new Session();
         IsInDatabase = false;
-        Pages = [SpringPage, DamperPage, BalancePage, MiscPage, NotesPage];
+        Pages = [SpringPage, DamperPage, BalancePage, MiscPage, SummaryPage, NotesPage];
     }
 
     public SessionViewModel(Session session, bool fromDatabase)
     {
         this.session = session;
         IsInDatabase = fromDatabase;
-        Pages = [SpringPage, DamperPage, BalancePage, MiscPage, NotesPage];
+        Pages = [SpringPage, DamperPage, BalancePage, MiscPage, SummaryPage, NotesPage];
 
         NotesPage.ForkSettings.PropertyChanged += (_, _) => EvaluateDirtiness();
         NotesPage.ShockSettings.PropertyChanged += (_, _) => EvaluateDirtiness();
@@ -327,6 +625,7 @@ public partial class SessionViewModel : ItemViewModelBase
             var cacheLoaded = await LoadCache();
             if (!cacheLoaded ||
                 ((SpringPage.FrontTravelHistogram is not null || SpringPage.RearTravelHistogram is not null) && MiscPage.VelocityDistributionComparison is null) ||
+                (SpringPage.TravelComparisonHistogram is not null && SpringPage.FrontRearTravelScatter is null) ||
                 MiscPage.PositionVelocityComparison is null)
             {
                 await CreateCache(bounds);
@@ -358,6 +657,14 @@ public partial class SessionViewModel : ItemViewModelBase
                 {
                     SpringPage.TravelComparisonHistogram = null;
                 }
+            }
+
+            var summaryDatabaseService = App.Current?.Services?.GetService<IDatabaseService>();
+            Debug.Assert(summaryDatabaseService != null, nameof(summaryDatabaseService) + " != null");
+            var summaryData = await summaryDatabaseService.GetSessionPsstAsync(Id);
+            if (summaryData is not null)
+            {
+                PopulateSummary(summaryData);
             }
         }
         catch (Exception e)

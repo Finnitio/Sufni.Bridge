@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using Sufni.Bridge.Models;
 using Sufni.Bridge.Services;
 using System.Collections.ObjectModel;
+using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Threading.Tasks;
 using System.Linq;
@@ -37,12 +38,42 @@ public partial class ImportSessionsViewModel : ViewModelBase
 
     #region Property change handlers
 
-    private async void GetDataStoreFiles(object? dataStore)
+    private async Task ApplyImportDefaults(ITelemetryDataStore dataStore, List<ITelemetryFile> files)
+    {
+        Debug.Assert(databaseService != null, nameof(databaseService) + " != null");
+
+        var boardId = dataStore.BoardId?.ToLower().Trim();
+        if (string.IsNullOrWhiteSpace(boardId))
+        {
+            return;
+        }
+
+        var boards = await databaseService.GetBoardsAsync();
+        var selectedBoard = boards.FirstOrDefault(b => b?.Id.ToLower().Trim() == boardId, null);
+        if (selectedBoard?.SetupId is null)
+        {
+            return;
+        }
+
+        var existingTimestamps = (await databaseService.GetSessionsAsync())
+            .Where(s => s.Setup == selectedBoard.SetupId && s.Timestamp.HasValue)
+            .Select(s => s.Timestamp!.Value)
+            .ToHashSet();
+
+        foreach (var file in files.Where(f => f.ShouldBeImported.HasValue && f.ShouldBeImported.Value))
+        {
+            var timestamp = (int)((DateTimeOffset)file.StartTime).ToUnixTimeSeconds();
+            file.ShouldBeImported = !existingTimestamps.Contains(timestamp);
+        }
+    }
+
+    private async Task GetDataStoreFiles(ITelemetryDataStore dataStore)
     {
         ImportInProgress = true;
 
         TelemetryFiles.Clear();
-        var files = await (dataStore as ITelemetryDataStore)!.GetFiles();
+        var files = await dataStore.GetFiles();
+        await ApplyImportDefaults(dataStore, files);
         Dispatcher.UIThread.Post(() =>
         {
             foreach (var file in files)
@@ -80,7 +111,7 @@ public partial class ImportSessionsViewModel : ViewModelBase
             ErrorMessages.Add($"Error while changing data store: {e.Message}");
         }
 
-        new Thread(GetDataStoreFiles).Start(value);
+        await GetDataStoreFiles(value);
     }
 
     #endregion Property change handlers
@@ -260,6 +291,7 @@ public partial class ImportSessionsViewModel : ViewModelBase
         }
 
         var files = await SelectedDataStore.GetFiles();
+        await ApplyImportDefaults(SelectedDataStore, files);
         TelemetryFiles.Clear();
         foreach (var file in files)
         {

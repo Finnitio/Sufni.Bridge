@@ -166,6 +166,7 @@ public class SqLiteDatabaseService : IDatabaseService
                 await connection.ExecuteAsync($"ALTER TABLE session_cache ADD COLUMN {name} TEXT");
         }
         await AddColumnIfMissing("travel_comparison_histogram");
+        await AddColumnIfMissing("front_rear_travel_scatter");
         await AddColumnIfMissing("front_position_distribution");
         await AddColumnIfMissing("rear_position_distribution");
         await AddColumnIfMissing("front_velocity_distribution");
@@ -588,6 +589,14 @@ public class SqLiteDatabaseService : IDatabaseService
             session.Deleted = (int)DateTimeOffset.Now.ToUnixTimeSeconds();
             await connection.UpdateAsync(session);
         }
+    }
+
+    public async Task<bool> SessionExistsForTimestampAsync(int timestamp)
+    {
+        await Initialization;
+        return await connection.Table<Session>()
+            .Where(s => s.Deleted == null && s.Timestamp == timestamp)
+            .FirstOrDefaultAsync() is not null;
     }
 
     public async Task<SessionCache?> GetSessionCacheAsync(Guid sessionId)

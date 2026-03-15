@@ -8,6 +8,7 @@ public class SessionCache
 {
     [Column("session_id"), PrimaryKey] public Guid SessionId { get; set; }
     [Column("travel_comparison_histogram")] public string? TravelComparisonHistogram { get; set; }
+    [Column("front_rear_travel_scatter")] public string? FrontRearTravelScatter { get; set; }
     [Column("front_travel_histogram")] public string? FrontTravelHistogram { get; set; }
     [Column("rear_travel_histogram")] public string? RearTravelHistogram { get; set; }
     [Column("front_velocity_histogram")] public string? FrontVelocityHistogram { get; set; }

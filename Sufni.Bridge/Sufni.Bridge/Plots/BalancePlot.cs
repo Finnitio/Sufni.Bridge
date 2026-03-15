@@ -29,10 +29,12 @@ public class BalancePlot(Plot plot, BalanceType type) : TelemetryPlot(plot)
     {
         base.LoadTelemetryData(telemetryData);
 
-        Plot.Axes.Title.Label.Text = type == BalanceType.Compression
-           ? "Compression balance (mm/s / travel%)"
-           : "Rebound balance (mm/s / travel%)";
-        Plot.Layout.Fixed(new PixelPadding(40, 10, 40, 40));
+        Plot.Axes.Title.Label.Text = type == BalanceType.Compression ? "Compression balance" : "Rebound balance";
+        Plot.Axes.Bottom.Label.Text = "Suspension travel (%)";
+        Plot.Axes.Bottom.Label.ForeColor = Colors.Gray;
+        Plot.Axes.Left.Label.Text = "Suspension velocity (mm/s)";
+        Plot.Axes.Left.Label.ForeColor = Colors.Gray;
+        Plot.Layout.Fixed(new PixelPadding(50, 10, 40, 50));
 
         var balance = telemetryData.CalculateBalance(type);
 

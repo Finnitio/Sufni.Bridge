@@ -5,6 +5,9 @@
     <SupportedOSPlatformVersion>13.0</SupportedOSPlatformVersion>
     <Nullable>enable</Nullable>
     <CodesignKey>Apple Development: niels_barth@icloud.com (5BK7SW7DUL)</CodesignKey>
+    <ApplicationId>de.nielsbarth.sufnibridge-dev</ApplicationId>
+    <DevelopmentTeam>832925XDRU</DevelopmentTeam>
+    <AutomaticProvisioning>true</AutomaticProvisioning>
     <!--RuntimeIdentifier>iossimulator-x64</RuntimeIdentifier-->
     <!--RuntimeIdentifier>ios-arm64</RuntimeIdentifier-->
     <UseInterpreter>true</UseInterpreter>

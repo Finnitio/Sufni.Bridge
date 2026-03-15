@@ -58,28 +58,28 @@
                             <TextBlock TextAlignment="Center">
                                 <Run Text="HSR:" />
                                 <LineBreak />
-                                <Run Text="{Binding Path=HsrPercentage, RelativeSource={RelativeSource TemplatedParent}, StringFormat='0.00'}" />
+                                <Run Text="{Binding Path=HsrPercentage, RelativeSource={RelativeSource TemplatedParent}, StringFormat={}{0:0.0}}" />
                             </TextBlock>
                         </Border>
                         <Border Grid.Row="1" Background="#282828">
                             <TextBlock TextAlignment="Center">
                                 <Run Text="LSR:" />
                                 <LineBreak />
-                                <Run Text="{Binding Path=LsrPercentage, RelativeSource={RelativeSource TemplatedParent}, StringFormat='0.00'}" />
+                                <Run Text="{Binding Path=LsrPercentage, RelativeSource={RelativeSource TemplatedParent}, StringFormat={}{0:0.0}}" />
                             </TextBlock>
                         </Border>
                         <Border Grid.Row="2" Background="#282828">
                             <TextBlock TextAlignment="Center">
                                 <Run Text="LSC:" />
                                 <LineBreak />
-                                <Run Text="{Binding Path=LscPercentage, RelativeSource={RelativeSource TemplatedParent}, StringFormat='0.00'}" />
+                                <Run Text="{Binding Path=LscPercentage, RelativeSource={RelativeSource TemplatedParent}, StringFormat={}{0:0.0}}" />
                             </TextBlock>
                         </Border>
                         <Border Grid.Row="3" Background="#303030">
                             <TextBlock TextAlignment="Center">
                                 <Run Text="HSC:" />
                                 <LineBreak />
-                                <Run Text="{Binding Path=HscPercentage, RelativeSource={RelativeSource TemplatedParent}, StringFormat='0.00'}" />
+                                <Run Text="{Binding Path=HscPercentage, RelativeSource={RelativeSource TemplatedParent}, StringFormat={}{0:0.0}}" />
                             </TextBlock>
                         </Border>
                     </Grid>
