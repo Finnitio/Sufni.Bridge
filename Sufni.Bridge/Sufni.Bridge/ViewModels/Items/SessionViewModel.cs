@@ -40,10 +40,13 @@ public partial class SessionViewModel : ItemViewModelBase
         Debug.Assert(databaseService != null, nameof(databaseService) + " != null");
 
         var cache = await databaseService.GetSessionCacheAsync(Id);
+        Debug.WriteLine($"Session {Id}: LoadCache - cache found={cache is not null}");
         if (cache is null)
         {
             return false;
         }
+
+        Debug.WriteLine($"Session {Id}: Cache PositionVelocityComparison={(cache.PositionVelocityComparison?.Length ?? 0)} chars");
 
         SpringPage.TravelComparisonHistogram = cache.TravelComparisonHistogram;
         SpringPage.FrontRearTravelScatter = cache.FrontRearTravelScatter;
@@ -623,11 +626,14 @@ public partial class SessionViewModel : ItemViewModelBase
             }
 
             var cacheLoaded = await LoadCache();
+            Debug.WriteLine($"Session {Id}: cacheLoaded={cacheLoaded}, PositionVelocityComparison={(MiscPage.PositionVelocityComparison?.Length ?? 0)} chars");
+
             if (!cacheLoaded ||
                 ((SpringPage.FrontTravelHistogram is not null || SpringPage.RearTravelHistogram is not null) && MiscPage.VelocityDistributionComparison is null) ||
                 (SpringPage.TravelComparisonHistogram is not null && SpringPage.FrontRearTravelScatter is null) ||
                 MiscPage.PositionVelocityComparison is null)
             {
+                Debug.WriteLine($"Session {Id}: Triggering CreateCache - cacheLoaded={cacheLoaded}, PositionVelocityComparison null={MiscPage.PositionVelocityComparison is null}");
                 await CreateCache(bounds);
             }
 
