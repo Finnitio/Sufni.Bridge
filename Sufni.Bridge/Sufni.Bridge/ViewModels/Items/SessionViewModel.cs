@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -79,150 +80,171 @@ public partial class SessionViewModel : ItemViewModelBase
         MiscPage.FrontPositionVelocity = cache.FrontPositionVelocity;
         MiscPage.RearPositionVelocity = cache.RearPositionVelocity;
 
+        if (cache.SummaryJson is not null)
+        {
+            try
+            {
+                var summary = JsonSerializer.Deserialize<CachedSummaryData>(cache.SummaryJson);
+                if (summary is not null)
+                {
+                    SummaryPage.RunDataRows = new ObservableCollection<SummaryValueRow>(
+                        summary.RunDataRows.Select(r => new SummaryValueRow(r[0], r[1])));
+                    SummaryPage.ForkShockRows = new ObservableCollection<SummaryComparisonRow>(
+                        summary.ForkShockRows.Select(r => new SummaryComparisonRow(r[0], r[1], r[2])));
+                    SummaryPage.WheelRows = new ObservableCollection<SummaryComparisonRow>(
+                        summary.WheelRows.Select(r => new SummaryComparisonRow(r[0], r[1], r[2])));
+                }
+            }
+            catch
+            {
+                // Ignore corrupt summary cache - will be rebuilt from DB
+            }
+        }
+
         return true;
     }
 
-    private async Task CreateCache(object? bounds)
+    private async Task CreateCache(object? bounds, TelemetryData telemetryData)
     {
         var databaseService = App.Current?.Services?.GetService<IDatabaseService>();
         Debug.Assert(databaseService != null, nameof(databaseService) + " != null");
 
-        var telemetryData = await databaseService.GetSessionPsstAsync(Id);
-        if (telemetryData is null)
-        {
-            throw new Exception("Database error");
-        }
-
         var b = (Rect)bounds!;
         var (width, height) = ((int)b.Width, (int)(b.Height / 2.0));
-        var sessionCache = new SessionCache
-        {
-            SessionId = Id
-        };
 
-        if (telemetryData.Front.Present && telemetryData.Rear.Present)
+        var sessionCache = await Task.Run(() =>
         {
-            var tcmp = new TravelHistogramComparisonPlot(new Plot());
-            tcmp.LoadTelemetryData(telemetryData);
-            sessionCache.TravelComparisonHistogram = tcmp.Plot.GetSvgXml(width, height);
-            Dispatcher.UIThread.Post(() =>
+            var cache = new SessionCache { SessionId = Id };
+
+            if (telemetryData.Front.Present && telemetryData.Rear.Present)
             {
-                SpringPage.TravelComparisonHistogram = sessionCache.TravelComparisonHistogram;
-            });
+                var tcmp = new TravelHistogramComparisonPlot(new Plot());
+                tcmp.LoadTelemetryData(telemetryData);
+                cache.TravelComparisonHistogram = tcmp.Plot.GetSvgXml(width, height);
+                Dispatcher.UIThread.Post(() =>
+                {
+                    SpringPage.TravelComparisonHistogram = cache.TravelComparisonHistogram;
+                });
 
-            var frs = new FrontRearTravelScatterPlot(new Plot());
-            frs.LoadTelemetryData(telemetryData);
-            sessionCache.FrontRearTravelScatter = frs.Plot.GetSvgXml(width, height);
-            Dispatcher.UIThread.Post(() =>
+                var frs = new FrontRearTravelScatterPlot(new Plot());
+                frs.LoadTelemetryData(telemetryData);
+                cache.FrontRearTravelScatter = frs.Plot.GetSvgXml(width, height);
+                Dispatcher.UIThread.Post(() =>
+                {
+                    SpringPage.FrontRearTravelScatter = cache.FrontRearTravelScatter;
+                });
+            }
+            else
             {
-                SpringPage.FrontRearTravelScatter = sessionCache.FrontRearTravelScatter;
-            });
-        }
-        else
-        {
-            Dispatcher.UIThread.Post(() =>
+                Dispatcher.UIThread.Post(() =>
+                {
+                    SpringPage.TravelComparisonHistogram = null;
+                    SpringPage.FrontRearTravelScatter = null;
+                });
+            }
+
+            if (telemetryData.Front.Present)
             {
-                SpringPage.TravelComparisonHistogram = null;
-                SpringPage.FrontRearTravelScatter = null;
-            });
-        }
+                var fth = new TravelHistogramPlot(new Plot(), SuspensionType.Front);
+                fth.LoadTelemetryData(telemetryData);
+                cache.FrontTravelHistogram = fth.Plot.GetSvgXml(width, height);
+                Dispatcher.UIThread.Post(() => { SpringPage.FrontTravelHistogram = cache.FrontTravelHistogram; });
 
-        if (telemetryData.Front.Present)
-        {
-            var fth = new TravelHistogramPlot(new Plot(), SuspensionType.Front);
-            fth.LoadTelemetryData(telemetryData);
-            sessionCache.FrontTravelHistogram = fth.Plot.GetSvgXml(width, height);
-            Dispatcher.UIThread.Post(() => { SpringPage.FrontTravelHistogram = sessionCache.FrontTravelHistogram; });
+                var fvh = new VelocityHistogramPlot(new Plot(), SuspensionType.Front);
+                fvh.LoadTelemetryData(telemetryData);
+                cache.FrontVelocityHistogram = fvh.Plot.GetSvgXml(width - 64, 478);
+                Dispatcher.UIThread.Post(() => { DamperPage.FrontVelocityHistogram = cache.FrontVelocityHistogram; });
 
-            var fvh = new VelocityHistogramPlot(new Plot(), SuspensionType.Front);
-            fvh.LoadTelemetryData(telemetryData);
-            sessionCache.FrontVelocityHistogram = fvh.Plot.GetSvgXml(width - 64, 478);
-            Dispatcher.UIThread.Post(() => { DamperPage.FrontVelocityHistogram = sessionCache.FrontVelocityHistogram; });
+                var fvb = telemetryData.CalculateVelocityBands(SuspensionType.Front, 200);
+                cache.FrontHsrPercentage = fvb.HighSpeedRebound;
+                cache.FrontLsrPercentage = fvb.LowSpeedRebound;
+                cache.FrontLscPercentage = fvb.LowSpeedCompression;
+                cache.FrontHscPercentage = fvb.HighSpeedCompression;
+                Dispatcher.UIThread.Post(() =>
+                {
+                    DamperPage.FrontHsrPercentage = fvb.HighSpeedRebound;
+                    DamperPage.FrontLsrPercentage = fvb.LowSpeedRebound;
+                    DamperPage.FrontLscPercentage = fvb.LowSpeedCompression;
+                    DamperPage.FrontHscPercentage = fvb.HighSpeedCompression;
+                });
+            }
 
-            var fvb = telemetryData.CalculateVelocityBands(SuspensionType.Front, 200);
-            sessionCache.FrontHsrPercentage = fvb.HighSpeedRebound;
-            sessionCache.FrontLsrPercentage = fvb.LowSpeedRebound;
-            sessionCache.FrontLscPercentage = fvb.LowSpeedCompression;
-            sessionCache.FrontHscPercentage = fvb.HighSpeedCompression;
-            Dispatcher.UIThread.Post(() =>
+            if (telemetryData.Rear.Present)
             {
-                DamperPage.FrontHsrPercentage = fvb.HighSpeedRebound;
-                DamperPage.FrontLsrPercentage = fvb.LowSpeedRebound;
-                DamperPage.FrontLscPercentage = fvb.LowSpeedCompression;
-                DamperPage.FrontHscPercentage = fvb.HighSpeedCompression;
-            });
-        }
+                var rth = new TravelHistogramPlot(new Plot(), SuspensionType.Rear);
+                rth.LoadTelemetryData(telemetryData);
+                cache.RearTravelHistogram = rth.Plot.GetSvgXml(width, height);
+                Dispatcher.UIThread.Post(() => { SpringPage.RearTravelHistogram = cache.RearTravelHistogram; });
 
-        if (telemetryData.Rear.Present)
-        {
-            var rth = new TravelHistogramPlot(new Plot(), SuspensionType.Rear);
-            rth.LoadTelemetryData(telemetryData);
-            sessionCache.RearTravelHistogram = rth.Plot.GetSvgXml(width, height);
-            Dispatcher.UIThread.Post(() => { SpringPage.RearTravelHistogram = sessionCache.RearTravelHistogram; });
+                var rvh = new VelocityHistogramPlot(new Plot(), SuspensionType.Rear);
+                rvh.LoadTelemetryData(telemetryData);
+                cache.RearVelocityHistogram = rvh.Plot.GetSvgXml(width - 64, 478);
+                Dispatcher.UIThread.Post(() => { DamperPage.RearVelocityHistogram = cache.RearVelocityHistogram; });
 
-            var rvh = new VelocityHistogramPlot(new Plot(), SuspensionType.Rear);
-            rvh.LoadTelemetryData(telemetryData);
-            sessionCache.RearVelocityHistogram = rvh.Plot.GetSvgXml(width - 64, 478);
-            Dispatcher.UIThread.Post(() => { DamperPage.RearVelocityHistogram = sessionCache.RearVelocityHistogram; });
+                var rvb = telemetryData.CalculateVelocityBands(SuspensionType.Rear, 200);
+                cache.RearHsrPercentage = rvb.HighSpeedRebound;
+                cache.RearLsrPercentage = rvb.LowSpeedRebound;
+                cache.RearLscPercentage = rvb.LowSpeedCompression;
+                cache.RearHscPercentage = rvb.HighSpeedCompression;
+                Dispatcher.UIThread.Post(() =>
+                {
+                    DamperPage.RearHsrPercentage = rvb.HighSpeedRebound;
+                    DamperPage.RearLsrPercentage = rvb.LowSpeedRebound;
+                    DamperPage.RearLscPercentage = rvb.LowSpeedCompression;
+                    DamperPage.RearHscPercentage = rvb.HighSpeedCompression;
+                });
+            }
 
-            var rvb = telemetryData.CalculateVelocityBands(SuspensionType.Rear, 200);
-            sessionCache.RearHsrPercentage = rvb.HighSpeedRebound;
-            sessionCache.RearLsrPercentage = rvb.LowSpeedRebound;
-            sessionCache.RearLscPercentage = rvb.LowSpeedCompression;
-            sessionCache.RearHscPercentage = rvb.HighSpeedCompression;
-            Dispatcher.UIThread.Post(() =>
+            if (telemetryData.Front.Present && telemetryData.Rear.Present)
             {
-                DamperPage.RearHsrPercentage = rvb.HighSpeedRebound;
-                DamperPage.RearLsrPercentage = rvb.LowSpeedRebound;
-                DamperPage.RearLscPercentage = rvb.LowSpeedCompression;
-                DamperPage.RearHscPercentage = rvb.HighSpeedCompression;
-            });
-        }
+                var cb = new BalancePlot(new Plot(), BalanceType.Compression);
+                cb.LoadTelemetryData(telemetryData);
+                cache.CompressionBalance = cb.Plot.GetSvgXml(width, height);
+                Dispatcher.UIThread.Post(() => { BalancePage.CompressionBalance = cache.CompressionBalance; });
 
-        if (telemetryData.Front.Present && telemetryData.Rear.Present)
-        {
+                var rb = new BalancePlot(new Plot(), BalanceType.Rebound);
+                rb.LoadTelemetryData(telemetryData);
+                cache.ReboundBalance = rb.Plot.GetSvgXml(width, height);
+                Dispatcher.UIThread.Post(() => { BalancePage.ReboundBalance = cache.ReboundBalance; });
+            }
+            else
+            {
+                Dispatcher.UIThread.Post(() => { Pages.Remove(BalancePage); });
+            }
 
-            var cb = new BalancePlot(new Plot(), BalanceType.Compression);
-            cb.LoadTelemetryData(telemetryData);
-            sessionCache.CompressionBalance = cb.Plot.GetSvgXml(width, height);
-            Dispatcher.UIThread.Post(() => { BalancePage.CompressionBalance = sessionCache.CompressionBalance; });
+            // BYB diagrams
+            var vdc = new VelocityDistributionComparisonPlot(new Plot());
+            vdc.LoadTelemetryData(telemetryData);
+            cache.VelocityDistributionComparison = vdc.Plot.GetSvgXml(width, height);
+            Dispatcher.UIThread.Post(() => { MiscPage.VelocityDistributionComparison = cache.VelocityDistributionComparison; });
 
-            var rb = new BalancePlot(new Plot(), BalanceType.Rebound);
-            rb.LoadTelemetryData(telemetryData);
-            sessionCache.ReboundBalance = rb.Plot.GetSvgXml(width, height);
-            Dispatcher.UIThread.Post(() => { BalancePage.ReboundBalance = sessionCache.ReboundBalance; });
-        }
-        else
-        {
-            Dispatcher.UIThread.Post(() => { Pages.Remove(BalancePage); });
-        }
+            var pvc = new PositionVelocityComparisonPlot(new Plot());
+            pvc.LoadTelemetryData(telemetryData);
+            cache.PositionVelocityComparison = pvc.Plot.GetSvgXml(width, height);
+            Dispatcher.UIThread.Post(() => { MiscPage.PositionVelocityComparison = cache.PositionVelocityComparison; });
 
-        // BYB diagrams
-        var vdc = new VelocityDistributionComparisonPlot(new Plot());
-        vdc.LoadTelemetryData(telemetryData);
-        sessionCache.VelocityDistributionComparison = vdc.Plot.GetSvgXml(width, height);
-        Dispatcher.UIThread.Post(() => { MiscPage.VelocityDistributionComparison = sessionCache.VelocityDistributionComparison; });
+            if (telemetryData.Front.Present)
+            {
+                var fpv = new PositionVelocityPlot(new Plot(), SuspensionType.Front);
+                fpv.LoadTelemetryData(telemetryData);
+                cache.FrontPositionVelocity = fpv.Plot.GetSvgXml(width, height);
+                Dispatcher.UIThread.Post(() => { MiscPage.FrontPositionVelocity = cache.FrontPositionVelocity; });
+            }
 
-        var pvc = new PositionVelocityComparisonPlot(new Plot());
-        pvc.LoadTelemetryData(telemetryData);
-        sessionCache.PositionVelocityComparison = pvc.Plot.GetSvgXml(width, height);
-        Dispatcher.UIThread.Post(() => { MiscPage.PositionVelocityComparison = sessionCache.PositionVelocityComparison; });
+            if (telemetryData.Rear.Present)
+            {
+                var rpv = new PositionVelocityPlot(new Plot(), SuspensionType.Rear);
+                rpv.LoadTelemetryData(telemetryData);
+                cache.RearPositionVelocity = rpv.Plot.GetSvgXml(width, height);
+                Dispatcher.UIThread.Post(() => { MiscPage.RearPositionVelocity = cache.RearPositionVelocity; });
+            }
 
-        if (telemetryData.Front.Present)
-        {
-            var fpv = new PositionVelocityPlot(new Plot(), SuspensionType.Front);
-            fpv.LoadTelemetryData(telemetryData);
-            sessionCache.FrontPositionVelocity = fpv.Plot.GetSvgXml(width, height);
-            Dispatcher.UIThread.Post(() => { MiscPage.FrontPositionVelocity = sessionCache.FrontPositionVelocity; });
-        }
+            return cache;
+        });
 
-        if (telemetryData.Rear.Present)
-        {
-            var rpv = new PositionVelocityPlot(new Plot(), SuspensionType.Rear);
-            rpv.LoadTelemetryData(telemetryData);
-            sessionCache.RearPositionVelocity = rpv.Plot.GetSvgXml(width, height);
-            Dispatcher.UIThread.Post(() => { MiscPage.RearPositionVelocity = sessionCache.RearPositionVelocity; });
-        }
+        // Populate summary using already-loaded telemetryData (no extra DB call)
+        var summaryData = PopulateSummary(telemetryData);
+        sessionCache.SummaryJson = JsonSerializer.Serialize(summaryData);
 
         await databaseService.PutSessionCacheAsync(sessionCache);
     }
@@ -235,6 +257,11 @@ public partial class SessionViewModel : ItemViewModelBase
         double MaxCompression,
         double AvgRebound,
         double MaxRebound);
+
+    private sealed record CachedSummaryData(
+        string[][] RunDataRows,
+        string[][] ForkShockRows,
+        string[][] WheelRows);
 
     private static string FormatTravel(double value, double maxTravel)
     {
@@ -434,7 +461,7 @@ public partial class SessionViewModel : ItemViewModelBase
             reboundMax);
     }
 
-    private void PopulateSummary(TelemetryData telemetryData)
+    private CachedSummaryData PopulateSummary(TelemetryData telemetryData)
     {
         var date = (Timestamp ?? DateTime.UnixEpoch).ToString("yyyy-MM-dd");
         var time = (Timestamp ?? DateTime.UnixEpoch).ToString("HH:mm");
@@ -507,6 +534,11 @@ public partial class SessionViewModel : ItemViewModelBase
                 frontWheelStats is null ? "-" : FormatVelocity(frontWheelStats.MaxRebound),
                 rearWheelStats is null ? "-" : FormatVelocity(rearWheelStats.MaxRebound))
         ];
+
+        return new CachedSummaryData(
+            SummaryPage.RunDataRows.Select(r => new[] { r.Label, r.Value }).ToArray(),
+            SummaryPage.ForkShockRows.Select(r => new[] { r.Label, r.LeftValue, r.RightValue }).ToArray(),
+            SummaryPage.WheelRows.Select(r => new[] { r.Label, r.LeftValue, r.RightValue }).ToArray());
     }
 
     #endregion
@@ -613,12 +645,13 @@ public partial class SessionViewModel : ItemViewModelBase
     {
         try
         {
+            var databaseService = App.Current?.Services?.GetService<IDatabaseService>();
+            Debug.Assert(databaseService != null, nameof(databaseService) + " != null");
+
             if (!IsComplete)
             {
                 var httpApiService = App.Current?.Services?.GetService<IHttpApiService>();
-                var databaseService = App.Current?.Services?.GetService<IDatabaseService>();
                 Debug.Assert(httpApiService != null, nameof(httpApiService) + " != null");
-                Debug.Assert(databaseService != null, nameof(databaseService) + " != null");
 
                 var psst = await httpApiService.GetSessionPsstAsync(Id) ?? throw new Exception("Session data could not be downloaded from server.");
                 await databaseService.PatchSessionPsstAsync(Id, psst);
@@ -626,51 +659,41 @@ public partial class SessionViewModel : ItemViewModelBase
             }
 
             var cacheLoaded = await LoadCache();
-            Debug.WriteLine($"Session {Id}: cacheLoaded={cacheLoaded}, PositionVelocityComparison={(MiscPage.PositionVelocityComparison?.Length ?? 0)} chars");
 
-            if (!cacheLoaded ||
+            var needsRecreate = !cacheLoaded ||
                 ((SpringPage.FrontTravelHistogram is not null || SpringPage.RearTravelHistogram is not null) && MiscPage.VelocityDistributionComparison is null) ||
                 (SpringPage.TravelComparisonHistogram is not null && SpringPage.FrontRearTravelScatter is null) ||
-                MiscPage.PositionVelocityComparison is null)
-            {
-                Debug.WriteLine($"Session {Id}: Triggering CreateCache - cacheLoaded={cacheLoaded}, PositionVelocityComparison null={MiscPage.PositionVelocityComparison is null}");
-                await CreateCache(bounds);
-            }
+                MiscPage.PositionVelocityComparison is null;
 
-            if (SpringPage.TravelComparisonHistogram is null)
-            {
-                var databaseService = App.Current?.Services?.GetService<IDatabaseService>();
-                Debug.Assert(databaseService != null, nameof(databaseService) + " != null");
+            var needsSummary = SummaryPage.RunDataRows.Count == 0;
 
+            // Only hit the DB if we actually need to rebuild cache or summary
+            if (needsRecreate || needsSummary)
+            {
                 var telemetryData = await databaseService.GetSessionPsstAsync(Id);
-                if (telemetryData is not null && telemetryData.Front.Present && telemetryData.Rear.Present)
-                {
-                    var b = (Rect)bounds;
-                    var (width, height) = ((int)b.Width, (int)(b.Height / 2.0));
 
-                    var tcmp = new TravelHistogramComparisonPlot(new Plot());
-                    tcmp.LoadTelemetryData(telemetryData);
-                    SpringPage.TravelComparisonHistogram = tcmp.Plot.GetSvgXml(width, height);
+                if (needsRecreate)
+                {
+                    if (telemetryData is null)
+                    {
+                        throw new Exception("Database error");
+                    }
+
+                    // CreateCache also populates summary and persists both
+                    await CreateCache(bounds, telemetryData);
+                }
+                else if (telemetryData is not null && needsSummary)
+                {
+                    // Cache was valid but summary was missing (old cache without summary_json)
+                    var summaryData = PopulateSummary(telemetryData);
 
                     var cache = await databaseService.GetSessionCacheAsync(Id);
                     if (cache is not null)
                     {
-                        cache.TravelComparisonHistogram = SpringPage.TravelComparisonHistogram;
+                        cache.SummaryJson = JsonSerializer.Serialize(summaryData);
                         await databaseService.PutSessionCacheAsync(cache);
                     }
                 }
-                else
-                {
-                    SpringPage.TravelComparisonHistogram = null;
-                }
-            }
-
-            var summaryDatabaseService = App.Current?.Services?.GetService<IDatabaseService>();
-            Debug.Assert(summaryDatabaseService != null, nameof(summaryDatabaseService) + " != null");
-            var summaryData = await summaryDatabaseService.GetSessionPsstAsync(Id);
-            if (summaryData is not null)
-            {
-                PopulateSummary(summaryData);
             }
         }
         catch (Exception e)

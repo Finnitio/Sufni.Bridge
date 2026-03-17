@@ -175,6 +175,7 @@ public class SqLiteDatabaseService : IDatabaseService
         await AddColumnIfMissing("rear_position_velocity");
         await AddColumnIfMissing("velocity_distribution_comparison");
         await AddColumnIfMissing("position_velocity_comparison");
+        await AddColumnIfMissing("summary_json");
     }
 
     private class TableInfoRecord
@@ -610,19 +611,7 @@ public class SqLiteDatabaseService : IDatabaseService
     public async Task<Guid> PutSessionCacheAsync(SessionCache sessionCache)
     {
         await Initialization;
-
-        var existing = await connection.Table<SessionCache>()
-            .Where(s => s.SessionId == sessionCache.SessionId)
-            .FirstOrDefaultAsync() is not null;
-        if (existing)
-        {
-            await connection.UpdateAsync(sessionCache);
-        }
-        else
-        {
-            await connection.InsertAsync(sessionCache);
-        }
-
+        await connection.InsertOrReplaceAsync(sessionCache);
         return sessionCache.SessionId;
     }
 
