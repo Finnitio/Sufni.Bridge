@@ -32,7 +32,7 @@ public class TravelHistogramComparisonPlot(Plot plot) : TelemetryPlot(plot)
         // Front labels: left of line (UpperRight alignment = text ends at the x position)
         // Rear labels:  right of line (UpperLeft alignment = text starts at the x position), lower y
         bool isFront = type == SuspensionType.Front;
-        var labelY = isFront ? yRangeTop * 0.92 : yRangeTop * 0.82;
+        var labelY = isFront ? yRangeTop * 0.92 : yRangeTop * 0.84;
         var labelAlignment = isFront ? Alignment.UpperRight : Alignment.UpperLeft;
         var xOffset = isFront ? -4 : 4;
 

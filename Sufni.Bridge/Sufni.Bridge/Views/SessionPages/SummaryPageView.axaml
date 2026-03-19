@@ -27,12 +27,12 @@
         <Style Selector="TextBlock.summary-title">
             <Setter Property="FontWeight" Value="Bold" />
             <Setter Property="HorizontalAlignment" Value="Center" />
-            <Setter Property="Background" Value="#00c7a0" />
+            <Setter Property="Background" Value="#66c2a5" />
             <Setter Property="Foreground" Value="#15191c" />
             <Setter Property="Padding" Value="8,4" />
         </Style>
         <Style Selector="Border.summary-header-cell">
-            <Setter Property="Background" Value="#00c7a0" />
+            <Setter Property="Background" Value="#66c2a5" />
             <Setter Property="BorderBrush" Value="{StaticResource SufniBorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Padding" Value="8,6" />

@@ -274,6 +274,7 @@ public partial class ImportSessionsViewModel : ViewModelBase
                     var svm = new SessionViewModel(session, true);
                     sessions.AddOrUpdate(svm);
                     Notifications.Insert(0, $"{svm.Name} was successfully imported.");
+                    _ = Task.Run(svm.PrecomputeCache);
                 });
             }
             catch (Exception e)

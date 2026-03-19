@@ -45,10 +45,10 @@ public class VelocityDistributionComparisonPlot(Plot plot) : TelemetryPlot(plot)
             statsText =
                 $"mm/s\u00A0\u00A0\u00A0\u00A0\u00A0Front\u00A0\u00A0\u00A0\u00A0\u00A0Rear\n" +
                 $"C\u00A0avg:{N(fac)}\u00A0{N(rac)}\n" +
-                $"C\u00A095th:{N(fp5c)}\u00A0{N(rp5c)}\n" +
-                $"C\u00A0max:{N(fmc)}\u00A0{N(rmc)}\n" +
                 $"R\u00A0avg:{N(far)}\u00A0{N(rar)}\n" +
+                $"C\u00A095th:{N(fp5c)}\u00A0{N(rp5c)}\n" +
                 $"R\u00A095th:{N(fp5r)}\u00A0{N(rp5r)}\n" +
+                $"C\u00A0max:{N(fmc)}\u00A0{N(rmc)}\n" +
                 $"R\u00A0max:{N(fmr)}\u00A0{N(rmr)}";
         }
         else
@@ -58,10 +58,10 @@ public class VelocityDistributionComparisonPlot(Plot plot) : TelemetryPlot(plot)
             statsText =
                 $"mm/s\n" +
                 $"C\u00A0avg:{N(ac)}\n" +
-                $"C\u00A095th:{N(p5c)}\n" +
-                $"C\u00A0max:{N(mc)}\n" +
                 $"R\u00A0avg:{N(ar)}\n" +
+                $"C\u00A095th:{N(p5c)}\n" +
                 $"R\u00A095th:{N(p5r)}\n" +
+                $"C\u00A0max:{N(mc)}\n" +
                 $"R\u00A0max:{N(mr)}";
         }
 
@@ -88,8 +88,8 @@ public class VelocityDistributionComparisonPlot(Plot plot) : TelemetryPlot(plot)
         }
 
         SetTitle("Velocity distribution comparison");
-        // Match Spring tab padding: left=70, right=20, bottom=50, top=40
-        Plot.Layout.Fixed(new PixelPadding(70, 20, 50, 40));
+        // Match VelocityHistogramPlot padding: left=50, right=20, bottom=50, top=40
+        Plot.Layout.Fixed(new PixelPadding(50, 20, 50, 40));
 
         Plot.Axes.Bottom.Label.Text = "Velocity (m/s)";
         Plot.Axes.Left.Label.Text = "Time (%)";

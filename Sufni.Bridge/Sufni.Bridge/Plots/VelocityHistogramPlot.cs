@@ -81,8 +81,8 @@ public class VelocityHistogramPlot(Plot plot, SuspensionType type) : TelemetryPl
             ? "Front velocity"
             : "Rear velocity");
 
-        // Left=70 (Y-axis label), Right=20, Bottom=50, Top=100 (stats zone below title)
-        Plot.Layout.Fixed(new PixelPadding(70, 20, 50, 100));
+        // Left=50, Right=20, Bottom=50, Top=100 (stats zone below title)
+        Plot.Layout.Fixed(new PixelPadding(50, 20, 50, 100));
 
         Plot.Axes.Bottom.Label.Text = "Velocity (m/s)";
         Plot.Axes.Left.Label.Text = "Time (%)";

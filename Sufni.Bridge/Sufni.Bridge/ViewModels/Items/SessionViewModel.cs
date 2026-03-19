@@ -23,6 +23,10 @@ namespace Sufni.Bridge.ViewModels.Items;
 
 public partial class SessionViewModel : ItemViewModelBase
 {
+    // Shared across all instances — updated whenever any session loads with real bounds.
+    // Default matches iPhone 15 Pro logical width; height/2 is used for plots.
+    internal static Rect LastKnownBounds = new Rect(0, 0, 393, 700);
+
     private Session session;
     public bool IsInDatabase;
     private SpringPageViewModel SpringPage { get; } = new();
@@ -45,7 +49,9 @@ public partial class SessionViewModel : ItemViewModelBase
     private static SvgImage? SourceToImage(SvgSource? source) =>
         source is null ? null : new SvgImage { Source = source };
 
-    private async Task<bool> LoadCache()
+    // Returns (cacheFound, hasVdc, hasPvc) so the caller can detect incomplete old caches
+    // without checking in-memory properties that lazy loading hasn't set yet.
+    private async Task<(bool found, bool hasVdc, bool hasPvc)> LoadCache()
     {
         var databaseService = App.Current?.Services?.GetService<IDatabaseService>();
         Debug.Assert(databaseService != null, nameof(databaseService) + " != null");
@@ -54,62 +60,13 @@ public partial class SessionViewModel : ItemViewModelBase
         Debug.WriteLine($"Session {Id}: LoadCache - cache found={cache is not null}");
         if (cache is null)
         {
-            return false;
+            return (false, false, false);
         }
 
-        Debug.WriteLine($"Session {Id}: Cache PositionVelocityComparison={(cache.PositionVelocityComparison?.Length ?? 0)} chars");
+        var hasVdc = cache.VelocityDistributionComparison is not null;
+        var hasPvc = cache.PositionVelocityComparison is not null;
 
-        // Parse SVG XML to SvgSource on a background thread (SvgSource is thread-safe)
-        var (travelCompSrc, frontRearScatterSrc, frontTravelHistSrc, rearTravelHistSrc,
-             frontVelocityHistSrc, rearVelocityHistSrc, compressionBalanceSrc, reboundBalanceSrc,
-             velDistCompSrc, posVelCompSrc, frontPosVelSrc, rearPosVelSrc) =
-            await Task.Run(() => (
-                SvgToSource(cache.TravelComparisonHistogram),
-                SvgToSource(cache.FrontRearTravelScatter),
-                SvgToSource(cache.FrontTravelHistogram),
-                SvgToSource(cache.RearTravelHistogram),
-                SvgToSource(cache.FrontVelocityHistogram),
-                SvgToSource(cache.RearVelocityHistogram),
-                SvgToSource(cache.CompressionBalance),
-                SvgToSource(cache.ReboundBalance),
-                SvgToSource(cache.VelocityDistributionComparison),
-                SvgToSource(cache.PositionVelocityComparison),
-                SvgToSource(cache.FrontPositionVelocity),
-                SvgToSource(cache.RearPositionVelocity)
-            ));
-
-        // Create SvgImage on UI thread (SvgImage : AvaloniaObject requires UI thread)
-        SpringPage.TravelComparisonHistogram = SourceToImage(travelCompSrc);
-        SpringPage.FrontRearTravelScatter = SourceToImage(frontRearScatterSrc);
-        SpringPage.FrontTravelHistogram = SourceToImage(frontTravelHistSrc);
-        SpringPage.RearTravelHistogram = SourceToImage(rearTravelHistSrc);
-
-        DamperPage.FrontVelocityHistogram = SourceToImage(frontVelocityHistSrc);
-        DamperPage.RearVelocityHistogram = SourceToImage(rearVelocityHistSrc);
-        DamperPage.FrontHscPercentage = cache.FrontHscPercentage;
-        DamperPage.RearHscPercentage = cache.RearHscPercentage;
-        DamperPage.FrontLscPercentage = cache.FrontLscPercentage;
-        DamperPage.RearLscPercentage = cache.RearLscPercentage;
-        DamperPage.FrontLsrPercentage = cache.FrontLsrPercentage;
-        DamperPage.RearLsrPercentage = cache.RearLsrPercentage;
-        DamperPage.FrontHsrPercentage = cache.FrontHsrPercentage;
-        DamperPage.RearHsrPercentage = cache.RearHsrPercentage;
-
-        if (compressionBalanceSrc is not null)
-        {
-            BalancePage.CompressionBalance = SourceToImage(compressionBalanceSrc);
-            BalancePage.ReboundBalance = SourceToImage(reboundBalanceSrc);
-        }
-        else
-        {
-            Pages.Remove(BalancePage);
-        }
-
-        DamperPage.VelocityDistributionComparison = SourceToImage(velDistCompSrc);
-        MiscPage.PositionVelocityComparison = SourceToImage(posVelCompSrc);
-        MiscPage.FrontPositionVelocity = SourceToImage(frontPosVelSrc);
-        MiscPage.RearPositionVelocity = SourceToImage(rearPosVelSrc);
-
+        // 1. Summary: pure JSON, no SVG parsing — populate immediately
         if (cache.SummaryJson is not null)
         {
             try
@@ -131,7 +88,79 @@ public partial class SessionViewModel : ItemViewModelBase
             }
         }
 
-        return true;
+        // 2. SpringPage SVGs: parse in parallel and await — first page with plots the user will see
+        var travelCompTask       = Task.Run(() => SvgToSource(cache.TravelComparisonHistogram));
+        var frontRearScatterTask = Task.Run(() => SvgToSource(cache.FrontRearTravelScatter));
+        var frontTravelHistTask  = Task.Run(() => SvgToSource(cache.FrontTravelHistogram));
+        var rearTravelHistTask   = Task.Run(() => SvgToSource(cache.RearTravelHistogram));
+
+        await Task.WhenAll(travelCompTask, frontRearScatterTask, frontTravelHistTask, rearTravelHistTask);
+
+        // SvgImage requires UI thread — Loaded command always runs on UI thread
+        SpringPage.TravelComparisonHistogram = SourceToImage(travelCompTask.Result);
+        SpringPage.FrontRearTravelScatter    = SourceToImage(frontRearScatterTask.Result);
+        SpringPage.FrontTravelHistogram      = SourceToImage(frontTravelHistTask.Result);
+        SpringPage.RearTravelHistogram       = SourceToImage(rearTravelHistTask.Result);
+
+        // 3. Remaining pages: parse in background, only when cache is complete.
+        //    Incomplete caches have hasVdc/hasPvc=false → caller triggers CreateCache() instead.
+        if (hasVdc && hasPvc)
+        {
+            _ = Task.Run(async () =>
+            {
+                var frontVelHistTask = Task.Run(() => SvgToSource(cache.FrontVelocityHistogram));
+                var rearVelHistTask  = Task.Run(() => SvgToSource(cache.RearVelocityHistogram));
+                var compBalTask      = Task.Run(() => SvgToSource(cache.CompressionBalance));
+                var rebBalTask       = Task.Run(() => SvgToSource(cache.ReboundBalance));
+                var velDistCompTask  = Task.Run(() => SvgToSource(cache.VelocityDistributionComparison));
+                var posVelCompTask   = Task.Run(() => SvgToSource(cache.PositionVelocityComparison));
+                var frontPosVelTask  = Task.Run(() => SvgToSource(cache.FrontPositionVelocity));
+                var rearPosVelTask   = Task.Run(() => SvgToSource(cache.RearPositionVelocity));
+
+                await Task.WhenAll(frontVelHistTask, rearVelHistTask, compBalTask, rebBalTask,
+                    velDistCompTask, posVelCompTask, frontPosVelTask, rearPosVelTask);
+
+                var frontVelHistSrc = frontVelHistTask.Result;
+                var rearVelHistSrc  = rearVelHistTask.Result;
+                var compBalSrc      = compBalTask.Result;
+                var rebBalSrc       = rebBalTask.Result;
+                var velDistCompSrc  = velDistCompTask.Result;
+                var posVelCompSrc   = posVelCompTask.Result;
+                var frontPosVelSrc  = frontPosVelTask.Result;
+                var rearPosVelSrc   = rearPosVelTask.Result;
+
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    DamperPage.FrontVelocityHistogram = SourceToImage(frontVelHistSrc);
+                    DamperPage.RearVelocityHistogram  = SourceToImage(rearVelHistSrc);
+                    DamperPage.FrontHscPercentage     = cache.FrontHscPercentage;
+                    DamperPage.RearHscPercentage      = cache.RearHscPercentage;
+                    DamperPage.FrontLscPercentage     = cache.FrontLscPercentage;
+                    DamperPage.RearLscPercentage      = cache.RearLscPercentage;
+                    DamperPage.FrontLsrPercentage     = cache.FrontLsrPercentage;
+                    DamperPage.RearLsrPercentage      = cache.RearLsrPercentage;
+                    DamperPage.FrontHsrPercentage     = cache.FrontHsrPercentage;
+                    DamperPage.RearHsrPercentage      = cache.RearHsrPercentage;
+
+                    if (compBalSrc is not null)
+                    {
+                        BalancePage.CompressionBalance = SourceToImage(compBalSrc);
+                        BalancePage.ReboundBalance     = SourceToImage(rebBalSrc);
+                    }
+                    else
+                    {
+                        Pages.Remove(BalancePage);
+                    }
+
+                    DamperPage.VelocityDistributionComparison = SourceToImage(velDistCompSrc);
+                    MiscPage.PositionVelocityComparison       = SourceToImage(posVelCompSrc);
+                    MiscPage.FrontPositionVelocity            = SourceToImage(frontPosVelSrc);
+                    MiscPage.RearPositionVelocity             = SourceToImage(rearPosVelSrc);
+                });
+            });
+        }
+
+        return (true, hasVdc, hasPvc);
     }
 
     private async Task CreateCache(object? bounds, TelemetryData telemetryData)
@@ -185,7 +214,7 @@ public partial class SessionViewModel : ItemViewModelBase
 
                 var fvh = new VelocityHistogramPlot(new Plot(), SuspensionType.Front);
                 fvh.LoadTelemetryData(telemetryData);
-                sessionCache.FrontVelocityHistogram = fvh.Plot.GetSvgXml(width - 64, 478);
+                sessionCache.FrontVelocityHistogram = fvh.Plot.GetSvgXml(width, height + 60);
                 var frontVelocityHistSrc = SvgToSource(sessionCache.FrontVelocityHistogram);
                 Dispatcher.UIThread.Post(() => { DamperPage.FrontVelocityHistogram = SourceToImage(frontVelocityHistSrc); });
 
@@ -217,7 +246,7 @@ public partial class SessionViewModel : ItemViewModelBase
 
                 var rvh = new VelocityHistogramPlot(new Plot(), SuspensionType.Rear);
                 rvh.LoadTelemetryData(telemetryData);
-                sessionCache.RearVelocityHistogram = rvh.Plot.GetSvgXml(width - 64, 478);
+                sessionCache.RearVelocityHistogram = rvh.Plot.GetSvgXml(width, height + 60);
                 var rearVelocityHistSrc = SvgToSource(sessionCache.RearVelocityHistogram);
                 Dispatcher.UIThread.Post(() => { DamperPage.RearVelocityHistogram = SourceToImage(rearVelocityHistSrc); });
 
@@ -745,11 +774,36 @@ public partial class SessionViewModel : ItemViewModelBase
 
     #region Commands
 
+    // Called after import to pre-generate the plot cache in the background,
+    // before the user opens the session. Uses the last known bounds (updated on each Loaded call).
+    internal async Task PrecomputeCache()
+    {
+        try
+        {
+            if (!IsComplete) return;
+            var databaseService = App.Current?.Services?.GetService<IDatabaseService>();
+            if (databaseService is null) return;
+
+            var cacheExists = await databaseService.GetSessionCacheAsync(Id) is not null;
+            if (cacheExists) return;
+
+            var telemetryData = await databaseService.GetSessionPsstAsync(Id);
+            if (telemetryData is null) return;
+
+            await CreateCache(LastKnownBounds, telemetryData);
+        }
+        catch
+        {
+            // Best-effort — user opening the session will retry
+        }
+    }
+
     [RelayCommand]
     private async Task Loaded(Rect bounds)
     {
         try
         {
+            LastKnownBounds = bounds;
             var databaseService = App.Current?.Services?.GetService<IDatabaseService>();
             Debug.Assert(databaseService != null, nameof(databaseService) + " != null");
 
@@ -763,12 +817,14 @@ public partial class SessionViewModel : ItemViewModelBase
                 session.HasProcessedData = true;
             }
 
-            var cacheLoaded = await LoadCache();
+            var (cacheLoaded, hasVdc, hasPvc) = await LoadCache();
 
+            // Use cache-row flags (hasVdc/hasPvc) instead of in-memory properties —
+            // the background lazy-load task hasn't set DamperPage/MiscPage properties yet.
             var needsRecreate = !cacheLoaded ||
-                ((SpringPage.FrontTravelHistogram is not null || SpringPage.RearTravelHistogram is not null) && DamperPage.VelocityDistributionComparison is null) ||
+                ((SpringPage.FrontTravelHistogram is not null || SpringPage.RearTravelHistogram is not null) && !hasVdc) ||
                 (SpringPage.TravelComparisonHistogram is not null && SpringPage.FrontRearTravelScatter is null) ||
-                MiscPage.PositionVelocityComparison is null;
+                !hasPvc;
 
             var needsSummary = SummaryPage.RunDataRows.Count == 0;
 

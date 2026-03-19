@@ -52,7 +52,7 @@ public class SufniPlot
     }
 
     protected void SetTitle(string text) =>
-        Plot.Axes.Title.Label.Text = text.ToUpperInvariant();
+        Plot.Axes.Title.Label.Text = text;
 
     protected void AddLabel(string content, double x, double y, int xoffset, int yoffset, Alignment alignment = Alignment.LowerLeft, string? colorHex = null)
     {

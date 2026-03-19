@@ -21,26 +21,26 @@
             <Image IsVisible="{Binding VelocityDistributionComparison, Converter={x:Static ObjectConverters.IsNotNull}}" Source="{Binding VelocityDistributionComparison}" />
 
             <!--  Front velocity histogram  -->
-            <Grid ColumnDefinitions="* auto" IsVisible="{Binding FrontVelocityHistogram, Converter={x:Static ObjectConverters.IsNotNull}}">
-                <Image Grid.Column="0" Source="{Binding FrontVelocityHistogram}" />
+            <StackPanel IsVisible="{Binding FrontVelocityHistogram, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <Image Source="{Binding FrontVelocityHistogram}" />
                 <plots:VelocityBandView
-                    Grid.Column="1"
+                    Margin="50,0,20,0"
                     HscPercentage="{Binding FrontHscPercentage}"
                     HsrPercentage="{Binding FrontHsrPercentage}"
                     LscPercentage="{Binding FrontLscPercentage}"
                     LsrPercentage="{Binding FrontLsrPercentage}" />
-            </Grid>
+            </StackPanel>
 
             <!--  Rear velocity histogram  -->
-            <Grid ColumnDefinitions="* auto" IsVisible="{Binding RearVelocityHistogram, Converter={x:Static ObjectConverters.IsNotNull}}">
-                <Image Grid.Column="0" Source="{Binding RearVelocityHistogram}" />
+            <StackPanel IsVisible="{Binding RearVelocityHistogram, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <Image Source="{Binding RearVelocityHistogram}" />
                 <plots:VelocityBandView
-                    Grid.Column="1"
+                    Margin="50,0,20,0"
                     HscPercentage="{Binding RearHscPercentage}"
                     HsrPercentage="{Binding RearHsrPercentage}"
                     LscPercentage="{Binding RearLscPercentage}"
                     LsrPercentage="{Binding RearLsrPercentage}" />
-            </Grid>
+            </StackPanel>
 
         </StackPanel>
     </ScrollViewer>
