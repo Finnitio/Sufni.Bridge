@@ -41,8 +41,10 @@ public class TravelHistogramComparisonPlot(Plot plot) : TelemetryPlot(plot)
             var t = Plot.Add.Text(text, x, labelY);
             t.LabelFontColor = color;
             t.LabelFontSize = 11;
-            t.LabelAlignment = labelAlignment;
-            t.LabelOffsetX = xOffset;
+            t.LabelAlignment = Alignment.LowerCenter;
+            t.LabelRotation = -90;
+            t.LabelOffsetX = 0;
+            t.LabelOffsetY = 4;
         }
 
         AddLabel("avg", avgPct);
@@ -60,7 +62,7 @@ public class TravelHistogramComparisonPlot(Plot plot) : TelemetryPlot(plot)
         }
 
         SetTitle("Travel histogram comparison");
-        Plot.Layout.Fixed(new PixelPadding(70, 20, 50, 40));
+        Plot.Layout.Fixed(new PixelPadding(50, 20, 50, 40));
 
         Plot.Axes.Bottom.Label.Text = "Travel (%)";
         Plot.Axes.Left.Label.Text = "Time (%)";

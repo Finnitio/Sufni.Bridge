@@ -23,6 +23,9 @@ namespace Sufni.Bridge.ViewModels.Items;
 
 public partial class SessionViewModel : ItemViewModelBase
 {
+    // Increment when plot visuals change to force cache regeneration on all sessions.
+    private const int CurrentPlotVersion = 12;
+
     // Shared across all instances — updated whenever any session loads with real bounds.
     // Default matches iPhone 15 Pro logical width; height/2 is used for plots.
     internal static Rect LastKnownBounds = new Rect(0, 0, 393, 700);
@@ -58,7 +61,7 @@ public partial class SessionViewModel : ItemViewModelBase
 
         var cache = await databaseService.GetSessionCacheAsync(Id);
         Debug.WriteLine($"Session {Id}: LoadCache - cache found={cache is not null}");
-        if (cache is null)
+        if (cache is null || cache.PlotVersion != CurrentPlotVersion)
         {
             return (false, false, false);
         }
@@ -171,7 +174,7 @@ public partial class SessionViewModel : ItemViewModelBase
         var b = (Rect)bounds!;
         var (width, height) = ((int)b.Width, (int)(b.Height / 2.0));
 
-        var sessionCache = new SessionCache { SessionId = Id };
+        var sessionCache = new SessionCache { SessionId = Id, PlotVersion = CurrentPlotVersion };
         var tasks = new List<Task>();
 
         // Gruppe A: Spring comparison plots (Front+Rear)
@@ -214,7 +217,7 @@ public partial class SessionViewModel : ItemViewModelBase
 
                 var fvh = new VelocityHistogramPlot(new Plot(), SuspensionType.Front);
                 fvh.LoadTelemetryData(telemetryData);
-                sessionCache.FrontVelocityHistogram = fvh.Plot.GetSvgXml(width, height + 60);
+                sessionCache.FrontVelocityHistogram = fvh.Plot.GetSvgXml(width, height);
                 var frontVelocityHistSrc = SvgToSource(sessionCache.FrontVelocityHistogram);
                 Dispatcher.UIThread.Post(() => { DamperPage.FrontVelocityHistogram = SourceToImage(frontVelocityHistSrc); });
 
@@ -246,7 +249,7 @@ public partial class SessionViewModel : ItemViewModelBase
 
                 var rvh = new VelocityHistogramPlot(new Plot(), SuspensionType.Rear);
                 rvh.LoadTelemetryData(telemetryData);
-                sessionCache.RearVelocityHistogram = rvh.Plot.GetSvgXml(width, height + 60);
+                sessionCache.RearVelocityHistogram = rvh.Plot.GetSvgXml(width, height);
                 var rearVelocityHistSrc = SvgToSource(sessionCache.RearVelocityHistogram);
                 Dispatcher.UIThread.Post(() => { DamperPage.RearVelocityHistogram = SourceToImage(rearVelocityHistSrc); });
 

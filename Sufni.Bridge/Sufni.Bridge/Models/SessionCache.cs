@@ -28,4 +28,5 @@ public class SessionCache
     [Column("front_position_velocity")] public string? FrontPositionVelocity { get; set; }
     [Column("rear_position_velocity")] public string? RearPositionVelocity { get; set; }
     [Column("summary_json")] public string? SummaryJson { get; set; }
+    [Column("plot_version")] public int PlotVersion { get; set; }
 }

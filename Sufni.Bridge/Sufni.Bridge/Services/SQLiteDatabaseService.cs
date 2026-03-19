@@ -174,10 +174,10 @@ public class SqLiteDatabaseService : IDatabaseService
     {
         var tableInfo = await connection.QueryAsync<TableInfoRecord>("PRAGMA table_info(session_cache)");
         var columnNames = tableInfo.Select(column => column.Name).ToHashSet();
-        async Task AddColumnIfMissing(string name)
+        async Task AddColumnIfMissing(string name, string type = "TEXT")
         {
             if (!columnNames.Contains(name))
-                await connection.ExecuteAsync($"ALTER TABLE session_cache ADD COLUMN {name} TEXT");
+                await connection.ExecuteAsync($"ALTER TABLE session_cache ADD COLUMN {name} {type} DEFAULT 0");
         }
         await AddColumnIfMissing("travel_comparison_histogram");
         await AddColumnIfMissing("front_rear_travel_scatter");
@@ -190,6 +190,7 @@ public class SqLiteDatabaseService : IDatabaseService
         await AddColumnIfMissing("velocity_distribution_comparison");
         await AddColumnIfMissing("position_velocity_comparison");
         await AddColumnIfMissing("summary_json");
+        await AddColumnIfMissing("plot_version", "INTEGER");
     }
 
     private class TableInfoRecord

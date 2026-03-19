@@ -54,18 +54,16 @@ public class VelocityHistogramPlot(Plot plot, SuspensionType type) : TelemetryPl
             $"Comp\u00A0avg:\u00A0\u00A0{N(stats.AverageCompression)}\u00A0mm/s\n" +
             $"Comp\u00A095th:\u00A0{N(p95Comp)}\u00A0mm/s\n" +
             $"Comp\u00A0max:\u00A0\u00A0{N(stats.MaxCompression)}\u00A0mm/s\n" +
-            $"Reb\u00A0avg:\u00A0\u00A0\u00A0{N(System.Math.Abs(stats.AverageRebound))}\u00A0mm/s\n" +
-            $"Reb\u00A095th:\u00A0\u00A0{N(p95Reb)}\u00A0mm/s\n" +
-            $"Reb\u00A0max:\u00A0\u00A0\u00A0{N(System.Math.Abs(stats.MaxRebound))}\u00A0mm/s";
+            $"Reb\u00A0max:\u00A0\u00A0\u00A0{N(-stats.MaxRebound)}\u00A0mm/s\n" +
+            $"Reb\u00A095th:\u00A0\u00A0{N(-p95Reb)}\u00A0mm/s\n" +
+            $"Reb\u00A0avg:\u00A0\u00A0\u00A0{N(-stats.AverageRebound)}\u00A0mm/s";
 
-        // LowerLeft alignment at y=yRangeTop → text extends upward into the 100px top padding
-        var box = Plot.Add.Text(statsText, -VelocityLimitMs, yRangeTop);
+        var box = Plot.Add.Text(statsText, VelocityLimitMs, yRangeTop * 0.97);
         box.LabelFontColor = StatColor;
-        box.LabelFontSize = 10;
+        box.LabelFontSize = 9;
         box.LabelFontName = "Menlo";
-        box.LabelAlignment = Alignment.LowerLeft;
-        box.LabelOffsetX = 5;
-        box.LabelOffsetY = -4;
+        box.LabelAlignment = Alignment.UpperRight;
+        box.LabelOffsetX = -5;
         box.LabelBold = true;
         box.LabelBackgroundColor = Color.FromHex("#15191C").WithAlpha(220);
         box.LabelBorderColor = StatColor.WithAlpha(80);
@@ -81,8 +79,7 @@ public class VelocityHistogramPlot(Plot plot, SuspensionType type) : TelemetryPl
             ? "Front velocity"
             : "Rear velocity");
 
-        // Left=50, Right=20, Bottom=50, Top=100 (stats zone below title)
-        Plot.Layout.Fixed(new PixelPadding(50, 20, 50, 100));
+        Plot.Layout.Fixed(new PixelPadding(50, 20, 50, 40));
 
         Plot.Axes.Bottom.Label.Text = "Velocity (m/s)";
         Plot.Axes.Left.Label.Text = "Time (%)";

@@ -17,9 +17,10 @@ public class TravelHistogramPlot(Plot plot, SuspensionType type) : TelemetryPlot
         var text = Plot.Add.Text(content, x, y);
         text.LabelFontColor = StatColor;
         text.LabelFontSize = 12;
-        text.LabelAlignment = alignment;
-        text.LabelOffsetX = xoffset;
-        text.LabelOffsetY = yoffset;
+        text.LabelAlignment = Alignment.LowerCenter;
+        text.LabelRotation = -90;
+        text.LabelOffsetX = 0;
+        text.LabelOffsetY = 4;
     }
 
     private void AddStatistics(TelemetryData telemetryData, double yRangeTop)
@@ -58,10 +59,11 @@ public class TravelHistogramPlot(Plot plot, SuspensionType type) : TelemetryPlot
 
         var statsLabel = Plot.Add.Text(statsText, 100.0, yRangeTop * 0.85);
         statsLabel.LabelFontColor = StatColor;
-        statsLabel.LabelFontSize = 10;
+        statsLabel.LabelFontSize = 9;
         statsLabel.LabelFontName = "Menlo";
         statsLabel.LabelAlignment = Alignment.UpperRight;
         statsLabel.LabelOffsetX = -10; // 1em margin between label right edge and axis
+        statsLabel.LabelOffsetY = 3;
         statsLabel.LabelBold = true;
         statsLabel.LabelBackgroundColor = Color.FromHex("#15191C").WithAlpha(220);
         statsLabel.LabelBorderColor = StatColor.WithAlpha(80);
@@ -76,7 +78,7 @@ public class TravelHistogramPlot(Plot plot, SuspensionType type) : TelemetryPlot
         SetTitle(type == SuspensionType.Front
             ? "Front travel histogram"
             : "Rear travel histogram");
-        Plot.Layout.Fixed(new PixelPadding(70, 20, 50, 40));
+        Plot.Layout.Fixed(new PixelPadding(50, 20, 50, 40));
 
         Plot.Axes.Bottom.Label.Text = "Travel (%)";
         Plot.Axes.Left.Label.Text = "Time (%)";

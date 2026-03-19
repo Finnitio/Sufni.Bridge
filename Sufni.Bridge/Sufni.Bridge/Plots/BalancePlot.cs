@@ -29,7 +29,7 @@ public class BalancePlot(Plot plot, BalanceType type) : TelemetryPlot(plot)
         Plot.Axes.Bottom.Label.ForeColor = Color.FromHex("#D0D0D0");
         Plot.Axes.Left.Label.Text = type == BalanceType.Compression ? "Compression velocity (mm/s)" : "Rebound velocity (mm/s)";
         Plot.Axes.Left.Label.ForeColor = Color.FromHex("#D0D0D0");
-        Plot.Layout.Fixed(new PixelPadding(70, 10, 40, 50));
+        Plot.Layout.Fixed(new PixelPadding(70, 10, 50, 40));
 
         var balance = telemetryData.CalculateBalance(type);
 
@@ -87,10 +87,12 @@ public class BalancePlot(Plot plot, BalanceType type) : TelemetryPlot(plot)
         frontLegend.LabelFontColor = FrontColor;
         frontLegend.LabelFontSize = 12;
         frontLegend.LabelAlignment = Alignment.UpperRight;
+        frontLegend.LabelOffsetX = -12;
 
         var rearLegend = Plot.Add.Text("Rear", 100, legendY2);
         rearLegend.LabelFontColor = RearColor;
         rearLegend.LabelFontSize = 12;
         rearLegend.LabelAlignment = Alignment.UpperRight;
+        rearLegend.LabelOffsetX = -12;
     }
 }

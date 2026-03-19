@@ -82,6 +82,7 @@ public class PositionVelocityComparisonPlot(Plot plot) : TelemetryPlot(plot)
             frontLegend.LabelFontColor = FrontColor;
             frontLegend.LabelFontSize = 12;
             frontLegend.LabelAlignment = Alignment.UpperRight;
+            frontLegend.LabelOffsetX = -12;
         }
         if (telemetryData.Rear.Present)
         {
@@ -89,6 +90,7 @@ public class PositionVelocityComparisonPlot(Plot plot) : TelemetryPlot(plot)
             rearLegend.LabelFontColor = RearColor;
             rearLegend.LabelFontSize = 12;
             rearLegend.LabelAlignment = Alignment.UpperRight;
+            rearLegend.LabelOffsetX = -12;
         }
     }
 }
