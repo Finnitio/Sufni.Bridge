@@ -250,6 +250,21 @@ public class TelemetryData
         Airtimes = [.. airtimes];
     }
 
+    private static double[] ComputeVelocity(double[] travel, int sampleRate)
+    {
+        var n = travel.Length;
+        var v = new double[n];
+
+        v[0] = (travel[1] - travel[0]) * sampleRate;
+        for (var i = 1; i < n - 1; i++)
+        {
+            v[i] = (travel[i + 1] - travel[i - 1]) * sampleRate / 2.0;
+        }
+        v[n - 1] = (travel[n - 1] - travel[n - 2]) * sampleRate;
+
+        return v;
+    }
+
     private static (double[], int[]) DigitizeVelocity(double[] v, double step)
     {
         // Subtracting half bin ensures that 0 will be at the middle of one bin
@@ -281,16 +296,8 @@ public class TelemetryData
             throw new Exception("Front and rear record counts are not equal!");
         }
 
-        // Create time array
-        var recordCount = Math.Max(fc, rc);
-        var time = new double[recordCount];
-        for (var i = 0; i < time.Length; i++)
-        {
-            time[i] = 1.0 / SampleRate * i;
-        }
-
-        // Create Savitzky-Golay filter to get smoothed velocity data
-        var filter = new SavitzkyGolay(51, 1, 3);
+        // Create Whittaker-Henderson smoother for velocity smoothing
+        var smoother = new WhittakerHendersonSmoother(2, 1e4);
 
         if (Front.Present)
         {
@@ -315,7 +322,7 @@ public class TelemetryData
             var dt = Digitize(Front.Travel, tbins);
             Front.TravelBins = tbins;
 
-            var v = filter.Process(Front.Travel, time);
+            var v = smoother.Smooth(ComputeVelocity(Front.Travel, SampleRate));
             Front.Velocity = v;
             var (vbins, dv) = DigitizeVelocity(v, Parameters.VelocityHistStep);
             Front.VelocityBins = vbins;
@@ -355,7 +362,7 @@ public class TelemetryData
             var dt = Digitize(Rear.Travel, tbins);
             Rear.TravelBins = tbins;
 
-            var v = filter.Process(Rear.Travel, time);
+            var v = smoother.Smooth(ComputeVelocity(Rear.Travel, SampleRate));
             Rear.Velocity = v;
             var (vbins, dv) = DigitizeVelocity(v, Parameters.VelocityHistStep);
             Rear.VelocityBins = vbins;
