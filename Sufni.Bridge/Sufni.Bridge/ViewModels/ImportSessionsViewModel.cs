@@ -186,6 +186,14 @@ public partial class ImportSessionsViewModel : ViewModelBase
         SelectedSetup = selectedBoard?.SetupId;
     }
 
+    public async Task Refresh()
+    {
+        if (SelectedDataStore != null)
+        {
+            await GetDataStoreFiles(SelectedDataStore);
+        }
+    }
+
     #endregion
 
     #region Commands
