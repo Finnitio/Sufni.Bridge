@@ -297,7 +297,7 @@ public class TelemetryData
         }
 
         // Create Whittaker-Henderson smoother for velocity smoothing
-        var smoother = new WhittakerHendersonSmoother(2, 1e4);
+        var smoother = new WhittakerHendersonSmoother(2, 260);
 
         if (Front.Present)
         {
@@ -713,6 +713,23 @@ public class TelemetryData
             {
                 travel.Add(suspension.Travel[i]);
                 velocity.Add(suspension.Velocity[i]);
+            }
+        }
+
+        return new PositionVelocityData(travel.ToArray(), velocity.ToArray());
+    }
+
+    public PositionVelocityData CalculateDamperPositionVelocityData()
+    {
+        var travel = new List<double>();
+        var velocity = new List<double>();
+
+        foreach (var s in Rear.Strokes.Compressions.Concat(Rear.Strokes.Rebounds))
+        {
+            for (var i = s.Start; i <= s.End && i < Rear.Travel.Length; i++)
+            {
+                travel.Add(Linkage.WheelToDamperTravel(Rear.Travel[i]));
+                velocity.Add(Rear.Velocity[i]);
             }
         }
 

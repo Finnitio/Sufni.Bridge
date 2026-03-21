@@ -24,7 +24,7 @@ namespace Sufni.Bridge.ViewModels.Items;
 public partial class SessionViewModel : ItemViewModelBase
 {
     // Increment when plot visuals change to force cache regeneration on all sessions.
-    private const int CurrentPlotVersion = 13;
+    private const int CurrentPlotVersion = 19;
 
     // Shared across all instances — updated whenever any session loads with real bounds.
     // Default matches iPhone 15 Pro logical width; height/2 is used for plots.
@@ -113,6 +113,7 @@ public partial class SessionViewModel : ItemViewModelBase
             {
                 var frontVelHistTask = Task.Run(() => SvgToSource(cache.FrontVelocityHistogram));
                 var rearVelHistTask  = Task.Run(() => SvgToSource(cache.RearVelocityHistogram));
+                var combBalTask      = Task.Run(() => SvgToSource(cache.CombinedBalance));
                 var compBalTask      = Task.Run(() => SvgToSource(cache.CompressionBalance));
                 var rebBalTask       = Task.Run(() => SvgToSource(cache.ReboundBalance));
                 var velDistCompTask  = Task.Run(() => SvgToSource(cache.VelocityDistributionComparison));
@@ -120,11 +121,12 @@ public partial class SessionViewModel : ItemViewModelBase
                 var frontPosVelTask  = Task.Run(() => SvgToSource(cache.FrontPositionVelocity));
                 var rearPosVelTask   = Task.Run(() => SvgToSource(cache.RearPositionVelocity));
 
-                await Task.WhenAll(frontVelHistTask, rearVelHistTask, compBalTask, rebBalTask,
+                await Task.WhenAll(frontVelHistTask, rearVelHistTask, combBalTask, compBalTask, rebBalTask,
                     velDistCompTask, posVelCompTask, frontPosVelTask, rearPosVelTask);
 
                 var frontVelHistSrc = frontVelHistTask.Result;
                 var rearVelHistSrc  = rearVelHistTask.Result;
+                var combBalSrc      = combBalTask.Result;
                 var compBalSrc      = compBalTask.Result;
                 var rebBalSrc       = rebBalTask.Result;
                 var velDistCompSrc  = velDistCompTask.Result;
@@ -147,6 +149,7 @@ public partial class SessionViewModel : ItemViewModelBase
 
                     if (compBalSrc is not null)
                     {
+                        BalancePage.CombinedBalance    = SourceToImage(combBalSrc);
                         BalancePage.CompressionBalance = SourceToImage(compBalSrc);
                         BalancePage.ReboundBalance     = SourceToImage(rebBalSrc);
                     }
@@ -273,6 +276,12 @@ public partial class SessionViewModel : ItemViewModelBase
         {
             tasks.Add(Task.Run(() =>
             {
+                var combined = new CombinedBalancePlot(new Plot());
+                combined.LoadTelemetryData(telemetryData);
+                sessionCache.CombinedBalance = combined.Plot.GetSvgXml(width, height);
+                var combinedBalanceSrc = SvgToSource(sessionCache.CombinedBalance);
+                Dispatcher.UIThread.Post(() => { BalancePage.CombinedBalance = SourceToImage(combinedBalanceSrc); });
+
                 var cb = new BalancePlot(new Plot(), BalanceType.Compression);
                 cb.LoadTelemetryData(telemetryData);
                 sessionCache.CompressionBalance = cb.Plot.GetSvgXml(width, height);

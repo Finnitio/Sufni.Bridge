@@ -37,7 +37,7 @@ public class StorageProviderTelemetryDataStore : ITelemetryDataStore
         {
             if (item.Name.EndsWith(".SST") && item is IStorageFile file)
             {
-                files.Add(new StorageProviderTelemetryFile(file));
+                files.Add(new StorageProviderTelemetryFile(file, BoardId));
             }
         }
 
@@ -47,25 +47,15 @@ public class StorageProviderTelemetryDataStore : ITelemetryDataStore
     private async Task Init()
     {
         IStorageFile? boardIdFile = null;
-        IStorageFolder? uploadedFolder = null;
         var items = Folder.GetItemsAsync();
         await foreach (var item in items)
         {
             if (item.Name.Equals("BOARDID") && item is IStorageFile file)
             {
                 boardIdFile = file;
-                if (uploadedFolder is not null) break;
-            }
-
-            if (item.Name.Equals("uploaded") && item is IStorageFolder folder)
-            {
-                uploadedFolder = folder;
-                if (boardIdFile is not null) break;
+                break;
             }
         }
-
-        if (uploadedFolder is null)
-            await Folder.CreateFolderAsync("uploaded");
 
         if (boardIdFile is null) return;
 

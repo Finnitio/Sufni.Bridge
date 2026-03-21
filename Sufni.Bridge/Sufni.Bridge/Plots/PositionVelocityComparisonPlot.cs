@@ -17,9 +17,9 @@ public class PositionVelocityComparisonPlot(Plot plot) : TelemetryPlot(plot)
         }
 
         SetTitle("Position vs velocity comparison");
-        Plot.Layout.Fixed(new PixelPadding(70, 10, 50, 40));
+        Plot.Layout.Fixed(new PixelPadding(70, 14, 50, 40));
 
-        Plot.Axes.Bottom.Label.Text = "Travel (mm)";
+        Plot.Axes.Bottom.Label.Text = "Wheel travel (mm)";
         Plot.Axes.Left.Label.Text = "Velocity (mm/s)";
 
         var maxTravel = 0.0;
@@ -82,7 +82,7 @@ public class PositionVelocityComparisonPlot(Plot plot) : TelemetryPlot(plot)
             frontLegend.LabelFontColor = FrontColor;
             frontLegend.LabelFontSize = 12;
             frontLegend.LabelAlignment = Alignment.UpperRight;
-            frontLegend.LabelOffsetX = -12;
+            frontLegend.LabelOffsetX = -6;
         }
         if (telemetryData.Rear.Present)
         {
@@ -90,7 +90,7 @@ public class PositionVelocityComparisonPlot(Plot plot) : TelemetryPlot(plot)
             rearLegend.LabelFontColor = RearColor;
             rearLegend.LabelFontSize = 12;
             rearLegend.LabelAlignment = Alignment.UpperRight;
-            rearLegend.LabelOffsetX = -12;
+            rearLegend.LabelOffsetX = -6;
         }
     }
 }

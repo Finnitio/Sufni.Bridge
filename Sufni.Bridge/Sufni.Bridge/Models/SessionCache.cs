@@ -13,6 +13,7 @@ public class SessionCache
     [Column("rear_travel_histogram")] public string? RearTravelHistogram { get; set; }
     [Column("front_velocity_histogram")] public string? FrontVelocityHistogram { get; set; }
     [Column("rear_velocity_histogram")] public string? RearVelocityHistogram { get; set; }
+    [Column("combined_balance")] public string? CombinedBalance { get; set; }
     [Column("compression_balance")] public string? CompressionBalance { get; set; }
     [Column("rebound_balance")] public string? ReboundBalance { get; set; }
     [Column("front_hsc_percentage")] public double? FrontHscPercentage { get; set; }

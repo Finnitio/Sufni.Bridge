@@ -41,6 +41,7 @@ public interface IDatabaseService
     public Task PatchSessionPsstAsync(Guid id, byte[] data);
     public Task DeleteSessionAsync(Guid id);
     public Task<bool> SessionExistsForTimestampAsync(int timestamp);
+    public Task<HashSet<string>> GetImportedSourceIdentifiersAsync();
     public Task<SessionCache?> GetSessionCacheAsync(Guid sessionId);
     public Task<Guid> PutSessionCacheAsync(SessionCache sessionCache);
     public Task<int> GetLastSyncTimeAsync();

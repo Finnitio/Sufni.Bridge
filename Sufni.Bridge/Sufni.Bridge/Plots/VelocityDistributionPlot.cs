@@ -30,7 +30,7 @@ public class VelocityDistributionPlot(Plot plot, SuspensionType type) : Telemetr
         SetTitle(type == SuspensionType.Front
             ? "Front velocity distribution"
             : "Rear velocity distribution");
-        Plot.Layout.Fixed(new PixelPadding(70, 10, 50, 40));
+        Plot.Layout.Fixed(new PixelPadding(70, 14, 50, 40));
 
         Plot.Axes.Bottom.Label.Text = "Velocity (mm/s)";
         Plot.Axes.Left.Label.Text = "Time (%)";
@@ -48,7 +48,7 @@ public class VelocityDistributionPlot(Plot plot, SuspensionType type) : Telemetr
 
         var bars = summedValues.Select((value, i) => new Bar
         {
-            Position = data.Bins[i],
+            Position = data.Bins[i] + step / 2.0,
             Value = value,
             FillColor = color.WithOpacity(),
             LineColor = color,

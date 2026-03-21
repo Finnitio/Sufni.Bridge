@@ -168,6 +168,7 @@ public class SqLiteDatabaseService : IDatabaseService
         }
         await AddColumnIfMissing("front_volspc");
         await AddColumnIfMissing("rear_volspc");
+        await AddColumnIfMissing("source_id", "TEXT");
     }
 
     private async Task EnsureSessionCacheColumns()
@@ -191,6 +192,7 @@ public class SqLiteDatabaseService : IDatabaseService
         await AddColumnIfMissing("position_velocity_comparison");
         await AddColumnIfMissing("summary_json");
         await AddColumnIfMissing("plot_version", "INTEGER");
+        await AddColumnIfMissing("combined_balance");
     }
 
     private class TableInfoRecord
@@ -615,6 +617,17 @@ public class SqLiteDatabaseService : IDatabaseService
         return await connection.Table<Session>()
             .Where(s => s.Deleted == null && s.Timestamp == timestamp)
             .FirstOrDefaultAsync() is not null;
+    }
+
+    public async Task<HashSet<string>> GetImportedSourceIdentifiersAsync()
+    {
+        await Initialization;
+        var sessions = await connection.QueryAsync<Session>(
+            "SELECT source_id FROM session WHERE deleted IS NULL AND source_id IS NOT NULL");
+        return sessions
+            .Where(s => s.SourceIdentifier != null)
+            .Select(s => s.SourceIdentifier!)
+            .ToHashSet();
     }
 
     public async Task<SessionCache?> GetSessionCacheAsync(Guid sessionId)

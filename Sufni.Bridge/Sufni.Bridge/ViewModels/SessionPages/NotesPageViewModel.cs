@@ -1,4 +1,5 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+﻿using System;
+using CommunityToolkit.Mvvm.ComponentModel;
 using Sufni.Bridge.Models;
 
 namespace Sufni.Bridge.ViewModels.SessionPages;
@@ -6,7 +7,17 @@ namespace Sufni.Bridge.ViewModels.SessionPages;
 public partial class SuspensionSettings : ObservableObject
 {
     [ObservableProperty] private string? springRate;
-    [ObservableProperty] private uint? volSpc;
+    [ObservableProperty] private double? volSpc;
+
+    partial void OnVolSpcChanged(double? value)
+    {
+        if (value.HasValue)
+        {
+            var rounded = Math.Round(value.Value, 2, MidpointRounding.AwayFromZero);
+            if (rounded != value.Value)
+                VolSpc = rounded;
+        }
+    }
     [ObservableProperty] private uint? highSpeedCompression;
     [ObservableProperty] private uint? lowSpeedCompression;
     [ObservableProperty] private uint? lowSpeedRebound;

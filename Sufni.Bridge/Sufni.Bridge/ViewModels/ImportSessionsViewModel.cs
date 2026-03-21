@@ -38,32 +38,18 @@ public partial class ImportSessionsViewModel : ViewModelBase
 
     #region Property change handlers
 
-    private async Task ApplyImportDefaults(ITelemetryDataStore dataStore, List<ITelemetryFile> files)
+    private async Task ApplyImportDefaults(List<ITelemetryFile> files)
     {
         Debug.Assert(databaseService != null, nameof(databaseService) + " != null");
 
-        var boardId = dataStore.BoardId?.ToLower().Trim();
-        if (string.IsNullOrWhiteSpace(boardId))
-        {
-            return;
-        }
-
-        var boards = await databaseService.GetBoardsAsync();
-        var selectedBoard = boards.FirstOrDefault(b => b?.Id.ToLower().Trim() == boardId, null);
-        if (selectedBoard?.SetupId is null)
-        {
-            return;
-        }
-
-        var existingTimestamps = (await databaseService.GetSessionsAsync())
-            .Where(s => s.Setup == selectedBoard.SetupId && s.Timestamp.HasValue)
-            .Select(s => s.Timestamp!.Value)
-            .ToHashSet();
+        var importedIds = await databaseService.GetImportedSourceIdentifiersAsync();
 
         foreach (var file in files.Where(f => f.ShouldBeImported.HasValue && f.ShouldBeImported.Value))
         {
-            var timestamp = (int)((DateTimeOffset)file.StartTime).ToUnixTimeSeconds();
-            file.ShouldBeImported = !existingTimestamps.Contains(timestamp);
+            if (importedIds.Contains(file.SourceIdentifier))
+            {
+                file.ShouldBeImported = false;
+            }
         }
     }
 
@@ -73,7 +59,7 @@ public partial class ImportSessionsViewModel : ViewModelBase
 
         TelemetryFiles.Clear();
         var files = await dataStore.GetFiles();
-        await ApplyImportDefaults(dataStore, files);
+        await ApplyImportDefaults(files);
         Dispatcher.UIThread.Post(() =>
         {
             foreach (var file in files)
@@ -271,7 +257,8 @@ public partial class ImportSessionsViewModel : ViewModelBase
                     setup: SelectedSetup!.Value,
                     timestamp: (int)((DateTimeOffset)telemetryFile.StartTime).ToUnixTimeSeconds())
                 {
-                    ProcessedData = psst
+                    ProcessedData = psst,
+                    SourceIdentifier = telemetryFile.SourceIdentifier
                 };
 
                 await databaseService.PutSessionAsync(session);
@@ -300,7 +287,7 @@ public partial class ImportSessionsViewModel : ViewModelBase
         }
 
         var files = await SelectedDataStore.GetFiles();
-        await ApplyImportDefaults(SelectedDataStore, files);
+        await ApplyImportDefaults(files);
         TelemetryFiles.Clear();
         foreach (var file in files)
         {

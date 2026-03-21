@@ -18,7 +18,7 @@ public class FrontRearTravelScatterPlot(Plot plot) : TelemetryPlot(plot)
         }
 
         SetTitle("Front vs rear travel");
-        Plot.Layout.Fixed(new PixelPadding(70, 20, 50, 40));
+        Plot.Layout.Fixed(new PixelPadding(50, 24, 50, 40));
         Plot.Axes.Bottom.Label.Text = "Rear suspension travel (%)";
         Plot.Axes.Left.Label.Text = "Front suspension travel (%)";
 

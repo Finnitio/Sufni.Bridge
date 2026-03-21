@@ -13,16 +13,21 @@ public class PositionVelocityPlot(Plot plot, SuspensionType type) : TelemetryPlo
 
         SetTitle(type == SuspensionType.Front
             ? "Front position vs velocity"
-            : "Rear position vs velocity");
-        Plot.Layout.Fixed(new PixelPadding(70, 10, 50, 40));
+            : "Damper position vs velocity");
+        Plot.Layout.Fixed(new PixelPadding(70, 14, 50, 40));
 
-        Plot.Axes.Bottom.Label.Text = "Travel (mm)";
+        var useDamperTravel = type == SuspensionType.Rear;
+        Plot.Axes.Bottom.Label.Text = useDamperTravel ? "Damper travel (mm)" : "Wheel travel (mm)";
         Plot.Axes.Left.Label.Text = "Velocity (mm/s)";
 
-        var data = telemetryData.CalculatePositionVelocityData(type);
-        var maxTravel = type == SuspensionType.Front
-            ? telemetryData.Linkage.MaxFrontTravel
-            : telemetryData.Linkage.MaxRearTravel;
+        var data = useDamperTravel
+            ? telemetryData.CalculateDamperPositionVelocityData()
+            : telemetryData.CalculatePositionVelocityData(type);
+        var maxTravel = useDamperTravel
+            ? telemetryData.Linkage.MaxRearStroke!.Value
+            : type == SuspensionType.Front
+                ? telemetryData.Linkage.MaxFrontTravel
+                : telemetryData.Linkage.MaxRearTravel;
         var color = type == SuspensionType.Front ? FrontColor : RearColor;
 
         var velocityMaxPositive = 0.0;
@@ -66,6 +71,6 @@ public class PositionVelocityPlot(Plot plot, SuspensionType type) : TelemetryPlo
         legend.LabelFontColor = color;
         legend.LabelFontSize = 12;
         legend.LabelAlignment = Alignment.UpperRight;
-        legend.LabelOffsetX = -12;
+        legend.LabelOffsetX = -6;
     }
 }

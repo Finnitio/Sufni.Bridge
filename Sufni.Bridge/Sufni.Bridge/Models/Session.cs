@@ -70,11 +70,11 @@ public class Session : Synchronizable
 
     [JsonIgnore]
     [Column("front_volspc")]
-    public uint? FrontVolSpc { get; set; }
+    public double? FrontVolSpc { get; set; }
 
     [JsonIgnore]
     [Column("rear_volspc")]
-    public uint? RearVolSpc { get; set; }
+    public double? RearVolSpc { get; set; }
 
     [JsonIgnore]
     [Column("front_hsc")]
@@ -107,6 +107,10 @@ public class Session : Synchronizable
     [JsonIgnore]
     [Column("rear_hsr")]
     public uint? RearHighSpeedRebound { get; set; }
+
+    [JsonIgnore]
+    [Column("source_id")]
+    public string? SourceIdentifier { get; set; }
 
     [JsonIgnore]
     [Column("has_data")]

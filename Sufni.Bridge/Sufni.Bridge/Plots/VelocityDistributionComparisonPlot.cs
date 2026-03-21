@@ -31,9 +31,9 @@ public class VelocityDistributionComparisonPlot(Plot plot) : TelemetryPlot(plot)
             return (s.AverageCompression,
                     cv.Count > 0 ? cv.Percentile(95) : 0.0,
                     s.MaxCompression,
-                    Math.Abs(s.AverageRebound),
-                    rv.Count > 0 ? rv.Percentile(95) : 0.0,
-                    Math.Abs(s.MaxRebound));
+                    s.AverageRebound,
+                    rv.Count > 0 ? -rv.Percentile(95) : 0.0,
+                    s.MaxRebound);
         }
 
         // Single merged box — "mm/s" in the header saves repeating the unit per line
@@ -89,7 +89,7 @@ public class VelocityDistributionComparisonPlot(Plot plot) : TelemetryPlot(plot)
 
         SetTitle("Velocity distribution comparison");
         // Match VelocityHistogramPlot padding: left=50, right=20, bottom=50, top=40
-        Plot.Layout.Fixed(new PixelPadding(50, 20, 50, 40));
+        Plot.Layout.Fixed(new PixelPadding(50, 24, 50, 40));
 
         Plot.Axes.Bottom.Label.Text = "Velocity (m/s)";
         Plot.Axes.Left.Label.Text = "Time (%)";
@@ -109,7 +109,7 @@ public class VelocityDistributionComparisonPlot(Plot plot) : TelemetryPlot(plot)
             // Velocity on X (m/s), time% on Y — vertical bars
             var bars = summedValues.Select((value, i) => new Bar
             {
-                Position = data.Bins[i] / 1000.0,   // mm/s → m/s
+                Position = (data.Bins[i] + step / 2.0) / 1000.0,   // mm/s → m/s, centered on bin midpoint
                 Value = value,
                 FillColor = color.WithOpacity(),
                 LineColor = color,
@@ -144,6 +144,6 @@ public class VelocityDistributionComparisonPlot(Plot plot) : TelemetryPlot(plot)
         Plot.Axes.SetLimits(left: -VelocityLimitMs, right: VelocityLimitMs, bottom: 0, top: topLimit);
         Plot.Axes.Bottom.TickGenerator = new NumericFixedInterval(0.5);
 
-        AddStatsBox(telemetryData, topLimit);
+        // Stats box removed — velocity statistics are shown in the individual histograms
     }
 }

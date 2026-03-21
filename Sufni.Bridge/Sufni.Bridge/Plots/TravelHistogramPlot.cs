@@ -34,13 +34,13 @@ public class TravelHistogramPlot(Plot plot, SuspensionType type) : TelemetryPlot
         var maxPercentage = mx > 0 ? statistics.Max / mx * 100.0 : 0.0;
         var p95Percentage = mx > 0 ? statistics.P95 / mx * 100.0 : 0.0;
 
-        Plot.Add.VerticalLine(avgPercentage, 2f, StatColor, LinePattern.Dashed);
-        Plot.Add.VerticalLine(maxPercentage, 2f, StatColor, LinePattern.Dashed);
-        Plot.Add.VerticalLine(p95Percentage, 2f, StatColor, LinePattern.Dashed);
+        Plot.Add.VerticalLine(statistics.Average, 2f, StatColor, LinePattern.Dashed);
+        Plot.Add.VerticalLine(statistics.Max, 2f, StatColor, LinePattern.Dashed);
+        Plot.Add.VerticalLine(statistics.P95, 2f, StatColor, LinePattern.Dashed);
 
-        AddSmallLabel("avg", avgPercentage, yRangeTop * 0.95, -8, 0, Alignment.MiddleRight);
-        AddSmallLabel("max", maxPercentage, yRangeTop * 0.95, -8, 0, Alignment.MiddleRight);
-        AddSmallLabel("95th", p95Percentage, yRangeTop * 0.95, -8, 0, Alignment.MiddleRight);
+        AddSmallLabel("avg", statistics.Average, yRangeTop * 0.95, -8, 0, Alignment.MiddleRight);
+        AddSmallLabel("max", statistics.Max, yRangeTop * 0.95, -8, 0, Alignment.MiddleRight);
+        AddSmallLabel("95th", statistics.P95, yRangeTop * 0.95, -8, 0, Alignment.MiddleRight);
 
         // Tabular layout with monospace font — use non-breaking spaces (\u00A0) to prevent
         // SVG whitespace normalization from collapsing leading padding spaces
@@ -57,7 +57,7 @@ public class TravelHistogramPlot(Plot plot, SuspensionType type) : TelemetryPlot
             $"Max:\u00A0\u00A0{N(statistics.Max)}\u00A0mm\u00A0({N(maxPercentage, 4)}%)\n" +
             boLine.PadRight(lineWidth, '\u00A0');
 
-        var statsLabel = Plot.Add.Text(statsText, 100.0, yRangeTop * 0.85);
+        var statsLabel = Plot.Add.Text(statsText, mx, yRangeTop * 0.85);
         statsLabel.LabelFontColor = StatColor;
         statsLabel.LabelFontSize = 9;
         statsLabel.LabelFontName = "Menlo";
@@ -78,9 +78,9 @@ public class TravelHistogramPlot(Plot plot, SuspensionType type) : TelemetryPlot
         SetTitle(type == SuspensionType.Front
             ? "Front travel histogram"
             : "Rear travel histogram");
-        Plot.Layout.Fixed(new PixelPadding(50, 20, 50, 40));
+        Plot.Layout.Fixed(new PixelPadding(50, 24, 50, 40));
 
-        Plot.Axes.Bottom.Label.Text = "Travel (%)";
+        Plot.Axes.Bottom.Label.Text = "Travel (mm)";
         Plot.Axes.Left.Label.Text = "Time (%)";
 
         var data = telemetryData.CalculateDetailedTravelHistogram(type);
@@ -88,7 +88,7 @@ public class TravelHistogramPlot(Plot plot, SuspensionType type) : TelemetryPlot
         var yRangeTop = Math.Max(1.0, maxTime) * HistogramRangeMultiplier;
         var color = type == SuspensionType.Front ? FrontColor : RearColor;
 
-        var bars = data.TravelMidsPercentage.Zip(data.TimePercentage)
+        var bars = data.TravelMidsMm.Zip(data.TimePercentage)
             .Select(tuple => new Bar
             {
                 Position = tuple.First,
@@ -97,24 +97,20 @@ public class TravelHistogramPlot(Plot plot, SuspensionType type) : TelemetryPlot
                 LineColor = color,
                 LineWidth = 2f,
                 Orientation = Orientation.Vertical,
-                Size = data.BarWidthsPercentage.Count > 0 ? data.BarWidthsPercentage[0] : 0.0,
+                Size = data.BarWidthsMm.Count > 0 ? data.BarWidthsMm[0] : 0.0,
             })
             .ToList();
 
         if (bars.Count > 0)
         {
-            for (var i = 0; i < bars.Count && i < data.BarWidthsPercentage.Count; i++)
+            for (var i = 0; i < bars.Count && i < data.BarWidthsMm.Count; i++)
             {
-                bars[i].Size = data.BarWidthsPercentage[i];
+                bars[i].Size = data.BarWidthsMm[i];
             }
 
             Plot.Add.Bars(bars);
-            Plot.Axes.SetLimits(left: 0, right: 100, bottom: 0, top: yRangeTop);
+            Plot.Axes.SetLimits(left: 0, right: data.MaxTravelMm, bottom: 0, top: yRangeTop);
         }
-
-        Plot.Axes.Bottom.TickGenerator = new NumericManual(
-            [0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0],
-            ["0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100"]);
 
         AddStatistics(telemetryData, yRangeTop);
     }

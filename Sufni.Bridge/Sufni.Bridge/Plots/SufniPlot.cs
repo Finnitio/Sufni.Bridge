@@ -42,9 +42,12 @@ public class SufniPlot
         Plot.Axes.Bottom.Label.Bold = false;
         Plot.Axes.Bottom.Label.FontSize = 14;
 
+        Plot.Axes.Bottom.Label.OffsetY = 16;
+
         Plot.Axes.Bottom.TickLabelStyle.ForeColor = Color.FromHex("#D0D0D0");
         Plot.Axes.Bottom.TickLabelStyle.Bold = false;
         Plot.Axes.Bottom.TickLabelStyle.FontSize = 12;
+        Plot.Axes.Bottom.TickLabelStyle.OffsetY = 5;
         Plot.Axes.Bottom.MajorTickStyle.Length = 0;
         Plot.Axes.Bottom.MinorTickStyle.Length = 0;
         Plot.Axes.Bottom.MajorTickStyle.Width = 0;

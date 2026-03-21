@@ -54,9 +54,9 @@ public class VelocityHistogramPlot(Plot plot, SuspensionType type) : TelemetryPl
             $"Comp\u00A0avg:\u00A0\u00A0{N(stats.AverageCompression)}\u00A0mm/s\n" +
             $"Comp\u00A095th:\u00A0{N(p95Comp)}\u00A0mm/s\n" +
             $"Comp\u00A0max:\u00A0\u00A0{N(stats.MaxCompression)}\u00A0mm/s\n" +
-            $"Reb\u00A0max:\u00A0\u00A0\u00A0{N(-stats.MaxRebound)}\u00A0mm/s\n" +
+            $"Reb\u00A0max:\u00A0\u00A0\u00A0{N(stats.MaxRebound)}\u00A0mm/s\n" +
             $"Reb\u00A095th:\u00A0\u00A0{N(-p95Reb)}\u00A0mm/s\n" +
-            $"Reb\u00A0avg:\u00A0\u00A0\u00A0{N(-stats.AverageRebound)}\u00A0mm/s";
+            $"Reb\u00A0avg:\u00A0\u00A0\u00A0{N(stats.AverageRebound)}\u00A0mm/s";
 
         var box = Plot.Add.Text(statsText, VelocityLimitMs, yRangeTop * 0.97);
         box.LabelFontColor = StatColor;
@@ -79,7 +79,7 @@ public class VelocityHistogramPlot(Plot plot, SuspensionType type) : TelemetryPl
             ? "Front velocity"
             : "Rear velocity");
 
-        Plot.Layout.Fixed(new PixelPadding(50, 20, 50, 40));
+        Plot.Layout.Fixed(new PixelPadding(50, 24, 50, 40));
 
         Plot.Axes.Bottom.Label.Text = "Velocity (m/s)";
         Plot.Axes.Left.Label.Text = "Time (%)";
@@ -102,7 +102,7 @@ public class VelocityHistogramPlot(Plot plot, SuspensionType type) : TelemetryPl
 
                 Plot.Add.Bar(new Bar
                 {
-                    Position = data.Bins[i] / 1000.0,   // mm/s → m/s on X axis
+                    Position = (data.Bins[i] + step / 2.0) / 1000.0,   // mm/s → m/s, centered on bin midpoint
                     ValueBase = nextBarBase,
                     Value = nextBarBase + data.Values[i][j],
                     FillColor = palette[j].WithOpacity(0.8),

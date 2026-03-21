@@ -15,7 +15,7 @@ public class BalancePlot(Plot plot, BalanceType type) : TelemetryPlot(plot)
             balance.RearVelocity.Select(Math.Abs).DefaultIfEmpty(0).Max());
 
         var msd = balance.MeanSignedDeviation / maxVelocity * 100.0;
-        var msdString = $"MSD: {msd:+0.00;-#.00} %";
+        var msdString = $"MSD: {msd:0.00} %";
 
         AddLabel(msdString, 100, 0, -10, -5, Alignment.LowerRight);
     }
@@ -29,7 +29,7 @@ public class BalancePlot(Plot plot, BalanceType type) : TelemetryPlot(plot)
         Plot.Axes.Bottom.Label.ForeColor = Color.FromHex("#D0D0D0");
         Plot.Axes.Left.Label.Text = type == BalanceType.Compression ? "Compression velocity (mm/s)" : "Rebound velocity (mm/s)";
         Plot.Axes.Left.Label.ForeColor = Color.FromHex("#D0D0D0");
-        Plot.Layout.Fixed(new PixelPadding(70, 10, 50, 40));
+        Plot.Layout.Fixed(new PixelPadding(70, 14, 50, 40));
 
         var balance = telemetryData.CalculateBalance(type);
 
@@ -87,12 +87,12 @@ public class BalancePlot(Plot plot, BalanceType type) : TelemetryPlot(plot)
         frontLegend.LabelFontColor = FrontColor;
         frontLegend.LabelFontSize = 12;
         frontLegend.LabelAlignment = Alignment.UpperRight;
-        frontLegend.LabelOffsetX = -12;
+        frontLegend.LabelOffsetX = -6;
 
         var rearLegend = Plot.Add.Text("Rear", 100, legendY2);
         rearLegend.LabelFontColor = RearColor;
         rearLegend.LabelFontSize = 12;
         rearLegend.LabelAlignment = Alignment.UpperRight;
-        rearLegend.LabelOffsetX = -12;
+        rearLegend.LabelOffsetX = -6;
     }
 }

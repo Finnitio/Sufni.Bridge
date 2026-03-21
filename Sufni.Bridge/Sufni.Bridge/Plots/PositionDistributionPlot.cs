@@ -54,7 +54,7 @@ public class PositionDistributionPlot(Plot plot, SuspensionType type) : Telemetr
         SetTitle(type == SuspensionType.Front
             ? "Front position distribution"
             : "Rear position distribution");
-        Plot.Layout.Fixed(new PixelPadding(70, 10, 50, 40));
+        Plot.Layout.Fixed(new PixelPadding(70, 14, 50, 40));
 
         Plot.Axes.Bottom.Label.Text = "Travel (mm)";
         Plot.Axes.Left.Label.Text = "Time (%)";
