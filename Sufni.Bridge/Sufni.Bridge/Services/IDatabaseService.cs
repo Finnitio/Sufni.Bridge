@@ -27,12 +27,14 @@ public interface IDatabaseService
     public Task<Calibration?> GetCalibrationAsync(Guid id);
     public Task<Guid> PutCalibrationAsync(Calibration calibration);
     public Task DeleteCalibrationAsync(Guid id);
+    public Task UndeleteAsync(Guid id, string table);
     public Task<List<Setup>> GetSetupsAsync();
     public Task<List<Setup>> GetChangedSetupsAsync(int since);
     public Task<Setup?> GetSetupAsync(Guid id);
     public Task<Guid> PutSetupAsync(Setup setup);
     public Task DeleteSetupAsync(Guid id);
     public Task<List<Session>> GetSessionsAsync();
+    public Task<Session?> GetMostRecentSessionAsync();
     public Task<List<Guid>> GetIncompleteSessionIdsAsync();
     public Task<List<Session>> GetChangedSessionsAsync(int since);
     public Task<TelemetryData?> GetSessionPsstAsync(Guid id);

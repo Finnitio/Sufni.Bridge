@@ -611,6 +611,13 @@ public class SqLiteDatabaseService : IDatabaseService
         }
     }
 
+    public async Task UndeleteAsync(Guid id, string table)
+    {
+        await Initialization;
+        await connection.ExecuteAsync(
+            $"UPDATE [{table}] SET deleted = NULL WHERE id = ?", id);
+    }
+
     public async Task<bool> SessionExistsForTimestampAsync(int timestamp)
     {
         await Initialization;
@@ -619,11 +626,28 @@ public class SqLiteDatabaseService : IDatabaseService
             .FirstOrDefaultAsync() is not null;
     }
 
+    public async Task<Session?> GetMostRecentSessionAsync()
+    {
+        await Initialization;
+        const string query = """
+                             SELECT
+                                 description,
+                                 front_springrate, front_volspc, front_hsc, front_lsc, front_lsr, front_hsr,
+                                 rear_springrate, rear_volspc, rear_hsc, rear_lsc, rear_lsr, rear_hsr
+                             FROM session
+                             WHERE deleted IS NULL
+                             ORDER BY timestamp DESC
+                             LIMIT 1
+                             """;
+        var results = await connection.QueryAsync<Session>(query);
+        return results.Count == 1 ? results[0] : null;
+    }
+
     public async Task<HashSet<string>> GetImportedSourceIdentifiersAsync()
     {
         await Initialization;
         var sessions = await connection.QueryAsync<Session>(
-            "SELECT source_id FROM session WHERE deleted IS NULL AND source_id IS NOT NULL");
+            "SELECT source_id FROM session WHERE source_id IS NOT NULL");
         return sessions
             .Where(s => s.SourceIdentifier != null)
             .Select(s => s.SourceIdentifier!)

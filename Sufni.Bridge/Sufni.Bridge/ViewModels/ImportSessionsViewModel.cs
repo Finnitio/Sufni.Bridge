@@ -218,6 +218,8 @@ public partial class ImportSessionsViewModel : ViewModelBase
 
         ImportInProgress = true;
 
+        var lastSession = await databaseService.GetMostRecentSessionAsync();
+
         foreach (var telemetryFile in TelemetryFiles.Where(f => f.ShouldBeImported.HasValue && f.ShouldBeImported.Value))
         {
             try
@@ -258,10 +260,23 @@ public partial class ImportSessionsViewModel : ViewModelBase
                     timestamp: (int)((DateTimeOffset)telemetryFile.StartTime).ToUnixTimeSeconds())
                 {
                     ProcessedData = psst,
-                    SourceIdentifier = telemetryFile.SourceIdentifier
+                    SourceIdentifier = telemetryFile.SourceIdentifier,
+                    FrontSpringRate = lastSession?.FrontSpringRate,
+                    FrontVolSpc = lastSession?.FrontVolSpc,
+                    FrontHighSpeedCompression = lastSession?.FrontHighSpeedCompression,
+                    FrontLowSpeedCompression = lastSession?.FrontLowSpeedCompression,
+                    FrontLowSpeedRebound = lastSession?.FrontLowSpeedRebound,
+                    FrontHighSpeedRebound = lastSession?.FrontHighSpeedRebound,
+                    RearSpringRate = lastSession?.RearSpringRate,
+                    RearVolSpc = lastSession?.RearVolSpc,
+                    RearHighSpeedCompression = lastSession?.RearHighSpeedCompression,
+                    RearLowSpeedCompression = lastSession?.RearLowSpeedCompression,
+                    RearLowSpeedRebound = lastSession?.RearLowSpeedRebound,
+                    RearHighSpeedRebound = lastSession?.RearHighSpeedRebound,
                 };
 
                 await databaseService.PutSessionAsync(session);
+                lastSession = session;
                 await telemetryFile.OnImported();
 
                 await Dispatcher.UIThread.InvokeAsync(() =>
