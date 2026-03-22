@@ -24,7 +24,7 @@ namespace Sufni.Bridge.ViewModels.Items;
 public partial class SessionViewModel : ItemViewModelBase
 {
     // Increment when plot visuals change to force cache regeneration on all sessions.
-    private const int CurrentPlotVersion = 19;
+    private const int CurrentPlotVersion = 21;
 
     // Shared across all instances — updated whenever any session loads with real bounds.
     // Default matches iPhone 15 Pro logical width; height/2 is used for plots.
@@ -111,8 +111,10 @@ public partial class SessionViewModel : ItemViewModelBase
         {
             _ = Task.Run(async () =>
             {
-                var frontVelHistTask = Task.Run(() => SvgToSource(cache.FrontVelocityHistogram));
-                var rearVelHistTask  = Task.Run(() => SvgToSource(cache.RearVelocityHistogram));
+                var frontVelHistTask   = Task.Run(() => SvgToSource(cache.FrontVelocityHistogram));
+                var frontLsVelHistTask = Task.Run(() => SvgToSource(cache.FrontLowSpeedVelocityHistogram));
+                var rearVelHistTask    = Task.Run(() => SvgToSource(cache.RearVelocityHistogram));
+                var rearLsVelHistTask  = Task.Run(() => SvgToSource(cache.RearLowSpeedVelocityHistogram));
                 var combBalTask      = Task.Run(() => SvgToSource(cache.CombinedBalance));
                 var compBalTask      = Task.Run(() => SvgToSource(cache.CompressionBalance));
                 var rebBalTask       = Task.Run(() => SvgToSource(cache.ReboundBalance));
@@ -121,11 +123,14 @@ public partial class SessionViewModel : ItemViewModelBase
                 var frontPosVelTask  = Task.Run(() => SvgToSource(cache.FrontPositionVelocity));
                 var rearPosVelTask   = Task.Run(() => SvgToSource(cache.RearPositionVelocity));
 
-                await Task.WhenAll(frontVelHistTask, rearVelHistTask, combBalTask, compBalTask, rebBalTask,
+                await Task.WhenAll(frontVelHistTask, frontLsVelHistTask, rearVelHistTask, rearLsVelHistTask,
+                    combBalTask, compBalTask, rebBalTask,
                     velDistCompTask, posVelCompTask, frontPosVelTask, rearPosVelTask);
 
-                var frontVelHistSrc = frontVelHistTask.Result;
-                var rearVelHistSrc  = rearVelHistTask.Result;
+                var frontVelHistSrc   = frontVelHistTask.Result;
+                var frontLsVelHistSrc = frontLsVelHistTask.Result;
+                var rearVelHistSrc    = rearVelHistTask.Result;
+                var rearLsVelHistSrc  = rearLsVelHistTask.Result;
                 var combBalSrc      = combBalTask.Result;
                 var compBalSrc      = compBalTask.Result;
                 var rebBalSrc       = rebBalTask.Result;
@@ -136,8 +141,10 @@ public partial class SessionViewModel : ItemViewModelBase
 
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    DamperPage.FrontVelocityHistogram = SourceToImage(frontVelHistSrc);
-                    DamperPage.RearVelocityHistogram  = SourceToImage(rearVelHistSrc);
+                    DamperPage.FrontVelocityHistogram          = SourceToImage(frontVelHistSrc);
+                    DamperPage.FrontLowSpeedVelocityHistogram = SourceToImage(frontLsVelHistSrc);
+                    DamperPage.RearVelocityHistogram           = SourceToImage(rearVelHistSrc);
+                    DamperPage.RearLowSpeedVelocityHistogram  = SourceToImage(rearLsVelHistSrc);
                     DamperPage.FrontHscPercentage     = cache.FrontHscPercentage;
                     DamperPage.RearHscPercentage      = cache.RearHscPercentage;
                     DamperPage.FrontLscPercentage     = cache.FrontLscPercentage;
@@ -224,6 +231,12 @@ public partial class SessionViewModel : ItemViewModelBase
                 var frontVelocityHistSrc = SvgToSource(sessionCache.FrontVelocityHistogram);
                 Dispatcher.UIThread.Post(() => { DamperPage.FrontVelocityHistogram = SourceToImage(frontVelocityHistSrc); });
 
+                var flsvh = new LowSpeedVelocityHistogramPlot(new Plot(), SuspensionType.Front);
+                flsvh.LoadTelemetryData(telemetryData);
+                sessionCache.FrontLowSpeedVelocityHistogram = flsvh.Plot.GetSvgXml(width, height);
+                var frontLsVelHistSrc = SvgToSource(sessionCache.FrontLowSpeedVelocityHistogram);
+                Dispatcher.UIThread.Post(() => { DamperPage.FrontLowSpeedVelocityHistogram = SourceToImage(frontLsVelHistSrc); });
+
                 var fvb = telemetryData.CalculateVelocityBands(SuspensionType.Front, 200);
                 sessionCache.FrontHsrPercentage = fvb.HighSpeedRebound;
                 sessionCache.FrontLsrPercentage = fvb.LowSpeedRebound;
@@ -255,6 +268,12 @@ public partial class SessionViewModel : ItemViewModelBase
                 sessionCache.RearVelocityHistogram = rvh.Plot.GetSvgXml(width, height);
                 var rearVelocityHistSrc = SvgToSource(sessionCache.RearVelocityHistogram);
                 Dispatcher.UIThread.Post(() => { DamperPage.RearVelocityHistogram = SourceToImage(rearVelocityHistSrc); });
+
+                var rlsvh = new LowSpeedVelocityHistogramPlot(new Plot(), SuspensionType.Rear);
+                rlsvh.LoadTelemetryData(telemetryData);
+                sessionCache.RearLowSpeedVelocityHistogram = rlsvh.Plot.GetSvgXml(width, height);
+                var rearLsVelHistSrc = SvgToSource(sessionCache.RearLowSpeedVelocityHistogram);
+                Dispatcher.UIThread.Post(() => { DamperPage.RearLowSpeedVelocityHistogram = SourceToImage(rearLsVelHistSrc); });
 
                 var rvb = telemetryData.CalculateVelocityBands(SuspensionType.Rear, 200);
                 sessionCache.RearHsrPercentage = rvb.HighSpeedRebound;
@@ -873,6 +892,94 @@ public partial class SessionViewModel : ItemViewModelBase
         {
             ErrorMessages.Add($"Could not load session data: {e.Message}");
         }
+    }
+
+    protected override bool CanExportPdf() => IsComplete;
+
+    protected override async Task ExportPdf()
+    {
+        try
+        {
+            var databaseService = App.Current?.Services?.GetService<IDatabaseService>();
+            Debug.Assert(databaseService != null, nameof(databaseService) + " != null");
+
+            var cache = await databaseService.GetSessionCacheAsync(Id);
+            if (cache is null)
+            {
+                ErrorMessages.Add("No cached plots found. Open the session first.");
+                return;
+            }
+
+            // Collect all SVG strings in tab display order
+            var svgEntries = new List<string?>();
+
+            // Spring tab
+            svgEntries.Add(cache.TravelComparisonHistogram);
+            svgEntries.Add(cache.FrontRearTravelScatter);
+            svgEntries.Add(cache.FrontTravelHistogram);
+            svgEntries.Add(cache.RearTravelHistogram);
+
+            // Damper tab
+            svgEntries.Add(cache.VelocityDistributionComparison);
+            svgEntries.Add(cache.FrontVelocityHistogram);
+            svgEntries.Add(cache.FrontLowSpeedVelocityHistogram);
+            svgEntries.Add(cache.RearVelocityHistogram);
+            svgEntries.Add(cache.RearLowSpeedVelocityHistogram);
+
+            // Balance tab
+            svgEntries.Add(cache.CombinedBalance);
+            svgEntries.Add(cache.CompressionBalance);
+            svgEntries.Add(cache.ReboundBalance);
+
+            // Misc tab
+            svgEntries.Add(cache.PositionVelocityComparison);
+            svgEntries.Add(cache.FrontPositionVelocity);
+            svgEntries.Add(cache.RearPositionVelocity);
+
+            var validSvgs = svgEntries.Where(s => s is not null).Cast<string>().ToList();
+            if (validSvgs.Count == 0)
+            {
+                ErrorMessages.Add("No plots to export.");
+                return;
+            }
+
+            var pdfPath = await Task.Run(() => RenderSvgsToPdf(validSvgs));
+
+            var shareService = App.Current?.Services?.GetService<IShareService>();
+            if (shareService is not null)
+                await shareService.ShareFileAsync(pdfPath);
+        }
+        catch (Exception e)
+        {
+            ErrorMessages.Add($"PDF export failed: {e.Message}");
+        }
+    }
+
+    private string RenderSvgsToPdf(List<string> svgXmlList)
+    {
+        var tempDir = System.IO.Path.GetTempPath();
+        // Strip characters that are invalid in filenames or URLs (space, #, %, &, etc.)
+        var sanitizedName = System.Text.RegularExpressions.Regex.Replace(Name ?? "session", @"[^\w\-.]", "_");
+        var pdfPath = System.IO.Path.Combine(tempDir, $"{sanitizedName}.pdf");
+
+        using var stream = new System.IO.FileStream(pdfPath, System.IO.FileMode.Create);
+        using var document = SkiaSharp.SKDocument.CreatePdf(stream);
+
+        foreach (var svgXml in svgXmlList)
+        {
+            using var svg = new Svg.Skia.SKSvg();
+            svg.FromSvg(svgXml);
+            var picture = svg.Picture;
+            if (picture is null) continue;
+
+            var bounds = picture.CullRect;
+            using var canvas = document.BeginPage(bounds.Width, bounds.Height);
+            canvas.DrawPicture(picture);
+            document.EndPage();
+        }
+
+        document.Close();
+        return pdfPath;
     }
 
     #endregion

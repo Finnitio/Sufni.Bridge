@@ -518,6 +518,50 @@ public class TelemetryData
             suspension.VelocityBins.ToList().GetRange(0, suspension.VelocityBins.Length), [.. hist]);
     }
 
+    public StackedHistogramData CalculateLowSpeedVelocityHistogram(SuspensionType type, double highSpeedThreshold)
+    {
+        var suspension = type == SuspensionType.Front ? Front : Rear;
+
+        var divider = (suspension.TravelBins.Length - 1) / TravelBinsForVelocityHistogram;
+        var stepFine = suspension.FineVelocityBins[1] - suspension.FineVelocityBins[0];
+        var hist = new double[suspension.FineVelocityBins.Length - 1][];
+        for (var i = 0; i < hist.Length; i++)
+        {
+            hist[i] = Generate.Zeros(TravelBinsForVelocityHistogram);
+        }
+
+        var totalCount = 0;
+        foreach (var s in suspension.Strokes.Compressions.Concat(suspension.Strokes.Rebounds))
+        {
+            totalCount += s.Stat.Count;
+            for (int i = 0; i < s.Stat.Count; ++i)
+            {
+                var vbinFine = s.FineDigitizedVelocity[i];
+                var midpoint = suspension.FineVelocityBins[vbinFine] + stepFine / 2.0;
+                if (midpoint <= -(highSpeedThreshold + stepFine / 2.0) ||
+                    midpoint >= (highSpeedThreshold + stepFine / 2.0))
+                    continue;
+
+                var tbin = s.DigitizedTravel[i] / divider;
+                hist[vbinFine][tbin] += 1;
+            }
+        }
+
+        if (totalCount > 0)
+        {
+            foreach (var travelHist in hist)
+            {
+                for (var j = 0; j < TravelBinsForVelocityHistogram; j++)
+                {
+                    travelHist[j] = travelHist[j] / totalCount * 100.0;
+                }
+            }
+        }
+
+        return new StackedHistogramData(
+            suspension.FineVelocityBins.ToList().GetRange(0, suspension.FineVelocityBins.Length), [.. hist]);
+    }
+
     public NormalDistributionData CalculateNormalDistribution(SuspensionType type)
     {
         var suspension = type == SuspensionType.Front ? Front : Rear;
@@ -550,6 +594,47 @@ public class TelemetryData
         for (int i = 0; i < 100; i++)
         {
             pdf.Add(Normal.PDF(mu, std, ny[i]) * step * 100);
+        }
+
+        return new NormalDistributionData([.. ny], pdf);
+    }
+
+    /// <summary>
+    /// Normal distribution for the low-speed velocity histogram.
+    /// Uses fine velocity bin step and population std (matching Python norm.fit / MLE).
+    /// Y values are in mm/s (not converted to m/s).
+    /// </summary>
+    public NormalDistributionData CalculateLowSpeedNormalDistribution(SuspensionType type, double highSpeedThreshold)
+    {
+        var suspension = type == SuspensionType.Front ? Front : Rear;
+        var fineStep = suspension.FineVelocityBins[1] - suspension.FineVelocityBins[0];
+        var velocity = suspension.Velocity.ToList();
+
+        var strokeVelocity = new List<double>();
+        foreach (var s in suspension.Strokes.Compressions)
+        {
+            strokeVelocity.AddRange(velocity.GetRange(s.Start, s.End - s.Start + 1));
+        }
+        foreach (var s in suspension.Strokes.Rebounds)
+        {
+            strokeVelocity.AddRange(velocity.GetRange(s.Start, s.End - s.Start + 1));
+        }
+
+        var mu = strokeVelocity.Mean();
+        var std = strokeVelocity.PopulationStandardDeviation();
+
+        var limit = highSpeedThreshold + fineStep / 2.0;
+        const int numPoints = 100;
+        var ny = new double[numPoints];
+        for (int i = 0; i < numPoints; i++)
+        {
+            ny[i] = -limit + i * (2.0 * limit) / (numPoints - 1);
+        }
+
+        var pdf = new List<double>(numPoints);
+        for (int i = 0; i < numPoints; i++)
+        {
+            pdf.Add(Normal.PDF(mu, std, ny[i]) * fineStep * 100);
         }
 
         return new NormalDistributionData([.. ny], pdf);

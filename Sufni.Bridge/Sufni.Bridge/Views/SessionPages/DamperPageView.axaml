@@ -23,6 +23,7 @@
             <!--  Front velocity histogram  -->
             <StackPanel IsVisible="{Binding FrontVelocityHistogram, Converter={x:Static ObjectConverters.IsNotNull}}">
                 <Image Source="{Binding FrontVelocityHistogram}" />
+                <Image IsVisible="{Binding FrontLowSpeedVelocityHistogram, Converter={x:Static ObjectConverters.IsNotNull}}" Source="{Binding FrontLowSpeedVelocityHistogram}" />
                 <plots:VelocityBandView
                     Margin="50,0,20,0"
                     HscPercentage="{Binding FrontHscPercentage}"
@@ -34,6 +35,7 @@
             <!--  Rear velocity histogram  -->
             <StackPanel IsVisible="{Binding RearVelocityHistogram, Converter={x:Static ObjectConverters.IsNotNull}}" Margin="0,24,0,0">
                 <Image Source="{Binding RearVelocityHistogram}" />
+                <Image IsVisible="{Binding RearLowSpeedVelocityHistogram, Converter={x:Static ObjectConverters.IsNotNull}}" Source="{Binding RearLowSpeedVelocityHistogram}" />
                 <plots:VelocityBandView
                     Margin="50,0,20,0"
                     HscPercentage="{Binding RearHscPercentage}"
