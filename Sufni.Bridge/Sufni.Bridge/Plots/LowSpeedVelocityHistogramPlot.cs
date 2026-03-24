@@ -75,7 +75,9 @@ public class LowSpeedVelocityHistogramPlot(Plot plot, SuspensionType type, doubl
         Plot.Axes.SetLimits(left: -velocityLimit, right: velocityLimit, bottom: 0, top: yRangeTop);
         Plot.Axes.Bottom.TickGenerator = new NumericFixedInterval(50);
 
-        // Normal distribution overlay using fine step (matched to reference: population std, fine bin width)
+        Plot.Add.VerticalLine(0, 1f, Color.FromHex("#dddddd"), LinePattern.Dotted);
+
+        // Normal distribution overlay — x range matches plot display range (±velocityLimit)
         var normalData = telemetryData.CalculateLowSpeedNormalDistribution(type, highSpeedThreshold);
         var normal = Plot.Add.Scatter(
             normalData.Y.ToArray(),

@@ -623,7 +623,7 @@ public class TelemetryData
         var mu = strokeVelocity.Mean();
         var std = strokeVelocity.PopulationStandardDeviation();
 
-        var limit = highSpeedThreshold + fineStep / 2.0;
+        var limit = highSpeedThreshold + 50; // match the plot display range (velocityLimit)
         const int numPoints = 100;
         var ny = new double[numPoints];
         for (int i = 0; i < numPoints; i++)

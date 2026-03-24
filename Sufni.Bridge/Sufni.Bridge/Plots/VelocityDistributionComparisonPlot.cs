@@ -144,6 +144,8 @@ public class VelocityDistributionComparisonPlot(Plot plot) : TelemetryPlot(plot)
         Plot.Axes.SetLimits(left: -VelocityLimitMs, right: VelocityLimitMs, bottom: 0, top: topLimit);
         Plot.Axes.Bottom.TickGenerator = new NumericFixedInterval(0.5);
 
+        Plot.Add.VerticalLine(0, 1f, Color.FromHex("#dddddd"), LinePattern.Dotted);
+
         // Stats box removed — velocity statistics are shown in the individual histograms
     }
 }

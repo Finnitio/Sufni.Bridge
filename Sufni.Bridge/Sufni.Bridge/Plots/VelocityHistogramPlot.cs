@@ -122,6 +122,8 @@ public class VelocityHistogramPlot(Plot plot, SuspensionType type) : TelemetryPl
         Plot.Axes.SetLimits(left: -VelocityLimitMs, right: VelocityLimitMs, bottom: 0, top: yRangeTop);
         Plot.Axes.Bottom.TickGenerator = new NumericFixedInterval(0.5);
 
+        Plot.Add.VerticalLine(0, 1f, Color.FromHex("#dddddd"), LinePattern.Dotted);
+
         // Normal distribution: X=velocity (m/s), Y=pdf (time%)
         var normalData = telemetryData.CalculateNormalDistribution(type);
         var normal = Plot.Add.Scatter(
