@@ -17,7 +17,7 @@ public class CombinedBalancePlot(Plot plot) : TelemetryPlot(plot)
         Plot.Axes.Bottom.Label.ForeColor = Color.FromHex("#D0D0D0");
         Plot.Axes.Left.Label.Text = "Velocity (mm/s)";
         Plot.Axes.Left.Label.ForeColor = Color.FromHex("#D0D0D0");
-        Plot.Layout.Fixed(new PixelPadding(70, 14, 50, 40));
+        Plot.Layout.Fixed(new PixelPadding(76, 14, 50, 40));
 
         var compBalance = telemetryData.CalculateBalance(BalanceType.Compression);
         var rebBalance = telemetryData.CalculateBalance(BalanceType.Rebound);
