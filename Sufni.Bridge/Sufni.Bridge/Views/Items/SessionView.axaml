@@ -125,7 +125,7 @@
         <Panel
             Grid.Row="0"
             Grid.RowSpan="5"
-            IsVisible="{Binding LoadedCommand.IsRunning}"
+            IsVisible="{Binding IsAnalyzingData}"
             ZIndex="100"
             Background="#CC15191C">
             <Border

@@ -25,7 +25,7 @@ namespace Sufni.Bridge.ViewModels.Items;
 public partial class SessionViewModel : ItemViewModelBase
 {
     // Increment when plot visuals change to force cache regeneration on all sessions.
-    private const int CurrentPlotVersion = 22;
+    private const int CurrentPlotVersion = 23;
 
     // Shared across all instances — updated whenever any session loads with real bounds.
     // Default matches iPhone 15 Pro logical width; height/2 is used for plots.
@@ -44,6 +44,7 @@ public partial class SessionViewModel : ItemViewModelBase
     public override bool IsComplete => session.HasProcessedData;
     public override bool ShowPdfExportButton => true;
     [CommunityToolkit.Mvvm.ComponentModel.ObservableProperty] private bool isGeneratingPdf;
+    [CommunityToolkit.Mvvm.ComponentModel.ObservableProperty] private bool isAnalyzingData;
 
     #region Private methods
 
@@ -875,7 +876,9 @@ public partial class SessionViewModel : ItemViewModelBase
                     }
 
                     // CreateCache also populates summary and persists both
-                    await CreateCache(bounds, telemetryData);
+                    IsAnalyzingData = true;
+                    try { await CreateCache(bounds, telemetryData); }
+                    finally { IsAnalyzingData = false; }
                 }
                 else if (telemetryData is not null && needsSummary)
                 {
@@ -948,7 +951,7 @@ public partial class SessionViewModel : ItemViewModelBase
                 return;
             }
 
-            var pdfPath = await Task.Run(() => RenderSvgsToPdf(validSvgs));
+            var pdfPath = await Task.Run(() => RenderSvgsToPdf(validSvgs, SummaryPage));
 
             IsGeneratingPdf = false;
             var shareService = App.Current?.Services?.GetService<IShareService>();
@@ -962,7 +965,104 @@ public partial class SessionViewModel : ItemViewModelBase
         }
     }
 
-    private string RenderSvgsToPdf(List<string> svgXmlList)
+    private static void DrawSummaryPage(SkiaSharp.SKDocument document, SummaryPageViewModel summary, float pageWidth)
+    {
+        const float margin = 30f;
+        const float rowH = 26f;
+        const float titleH = 28f;
+        const float sectionGap = 18f;
+        const float fontSize = 11f;
+        const float titleFontSize = 10f;
+
+        float contentWidth = pageWidth - margin * 2f;
+        float col0 = 160f;
+        float col12 = (contentWidth - col0) / 2f;
+
+        var bgColor       = SkiaSharp.SKColor.Parse("#15191c");
+        var cellBg        = SkiaSharp.SKColor.Parse("#20262b");
+        var headerBg      = SkiaSharp.SKColor.Parse("#66c2a5");
+        var headerFg      = SkiaSharp.SKColor.Parse("#15191c");
+        var cellFg        = SkiaSharp.SKColor.Parse("#a0a0a0");
+        var borderColor   = SkiaSharp.SKColor.Parse("#505050");
+
+        // Calculate total page height
+        float pageHeight = margin * 2f
+            + titleH + summary.RunDataRows.Count * rowH
+            + sectionGap
+            + rowH + summary.WheelRows.Count * rowH
+            + sectionGap
+            + rowH + summary.ForkShockRows.Count * rowH;
+
+        using var canvas = document.BeginPage(pageWidth, pageHeight);
+        canvas.Clear(bgColor);
+
+        using var fillPaint   = new SkiaSharp.SKPaint { IsStroke = false };
+        using var strokePaint = new SkiaSharp.SKPaint { IsStroke = true, StrokeWidth = 0.75f, Color = borderColor };
+        using var textPaint   = new SkiaSharp.SKPaint { IsAntialias = true, TextSize = fontSize };
+        using var boldPaint   = new SkiaSharp.SKPaint { IsAntialias = true, TextSize = titleFontSize,
+            Typeface = SkiaSharp.SKTypeface.FromFamilyName(null, SkiaSharp.SKFontStyle.Bold) };
+
+        void DrawCell(float x, float y, float w, float h, SkiaSharp.SKColor bg, SkiaSharp.SKColor fg,
+                      string text, bool rightAlign, bool bold)
+        {
+            var rect = new SkiaSharp.SKRect(x, y, x + w, y + h);
+            fillPaint.Color = bg;
+            canvas.DrawRect(rect, fillPaint);
+            canvas.DrawRect(rect, strokePaint);
+            var p = bold ? boldPaint : textPaint;
+            p.Color = fg;
+            float tw = p.MeasureText(text);
+            float tx = rightAlign ? x + w - 6f - tw : x + 6f;
+            float ty = y + h / 2f + p.TextSize * 0.35f;
+            canvas.DrawText(text, tx, ty, p);
+        }
+
+        float curY = margin;
+
+        // RUN DATA
+        DrawCell(margin, curY, contentWidth, titleH, headerBg, headerFg, "RUN DATA", false, true);
+        curY += titleH;
+        foreach (var row in summary.RunDataRows)
+        {
+            DrawCell(margin,          curY, col0,            rowH, cellBg, cellFg, row.Label, false, false);
+            DrawCell(margin + col0,   curY, contentWidth - col0, rowH, cellBg, cellFg, row.Value, true,  false);
+            curY += rowH;
+        }
+
+        curY += sectionGap;
+
+        // WHEEL
+        DrawCell(margin,              curY, col0,  rowH, headerBg, headerFg, "",             false, true);
+        DrawCell(margin + col0,       curY, col12, rowH, headerBg, headerFg, "FRONT WHEEL",  true,  true);
+        DrawCell(margin + col0 + col12, curY, col12, rowH, headerBg, headerFg, "REAR WHEEL", true,  true);
+        curY += rowH;
+        foreach (var row in summary.WheelRows)
+        {
+            DrawCell(margin,                curY, col0,  rowH, cellBg, cellFg, row.Label,      false, false);
+            DrawCell(margin + col0,         curY, col12, rowH, cellBg, cellFg, row.LeftValue,  true,  false);
+            DrawCell(margin + col0 + col12, curY, col12, rowH, cellBg, cellFg, row.RightValue, true,  false);
+            curY += rowH;
+        }
+
+        curY += sectionGap;
+
+        // FORK / SHOCK
+        DrawCell(margin,                curY, col0,  rowH, headerBg, headerFg, "",      false, true);
+        DrawCell(margin + col0,         curY, col12, rowH, headerBg, headerFg, "FORK",  true,  true);
+        DrawCell(margin + col0 + col12, curY, col12, rowH, headerBg, headerFg, "SHOCK", true,  true);
+        curY += rowH;
+        foreach (var row in summary.ForkShockRows)
+        {
+            DrawCell(margin,                curY, col0,  rowH, cellBg, cellFg, row.Label,      false, false);
+            DrawCell(margin + col0,         curY, col12, rowH, cellBg, cellFg, row.LeftValue,  true,  false);
+            DrawCell(margin + col0 + col12, curY, col12, rowH, cellBg, cellFg, row.RightValue, true,  false);
+            curY += rowH;
+        }
+
+        document.EndPage();
+    }
+
+    private string RenderSvgsToPdf(List<string> svgXmlList, SummaryPageViewModel summary)
     {
         var tempDir = System.IO.Path.GetTempPath();
         // Strip characters that are invalid in filenames or URLs (space, #, %, &, etc.)
@@ -986,6 +1086,8 @@ public partial class SessionViewModel : ItemViewModelBase
         {
             using var stream = new System.IO.FileStream(pdfPath, System.IO.FileMode.Create);
             using var document = SkiaSharp.SKDocument.CreatePdf(stream);
+
+            DrawSummaryPage(document, summary, (float)LastKnownBounds.Width);
 
             foreach (var svg in svgObjects)
             {

@@ -146,6 +146,20 @@ public class VelocityDistributionComparisonPlot(Plot plot) : TelemetryPlot(plot)
 
         Plot.Add.VerticalLine(0, 1f, Color.FromHex("#dddddd"), LinePattern.Dotted);
 
-        // Stats box removed — velocity statistics are shown in the individual histograms
+        // Legend — only when both suspensions are present
+        if (telemetryData.Front.Present && telemetryData.Rear.Present)
+        {
+            var frontLegend = Plot.Add.Text("Front", VelocityLimitMs, topLimit * 0.97);
+            frontLegend.LabelFontColor = FrontColor;
+            frontLegend.LabelFontSize = 12;
+            frontLegend.LabelAlignment = Alignment.UpperRight;
+            frontLegend.LabelOffsetX = -6;
+
+            var rearLegend = Plot.Add.Text("Rear", VelocityLimitMs, topLimit * 0.88);
+            rearLegend.LabelFontColor = RearColor;
+            rearLegend.LabelFontSize = 12;
+            rearLegend.LabelAlignment = Alignment.UpperRight;
+            rearLegend.LabelOffsetX = -6;
+        }
     }
 }

@@ -31,7 +31,7 @@ public class ShareService : IShareService
                 // iPad: UIActivityViewController needs a source rect
                 if (activityController.PopoverPresentationController != null)
                 {
-                    activityController.PopoverPresentationController.SourceView = presenter.View;
+                    activityController.PopoverPresentationController.SourceView = presenter.View!;
                     var b = presenter.View!.Bounds;
                     activityController.PopoverPresentationController.SourceRect =
                         new CoreGraphics.CGRect(b.X + b.Width / 2, b.Y + b.Height / 2, 0, 0);

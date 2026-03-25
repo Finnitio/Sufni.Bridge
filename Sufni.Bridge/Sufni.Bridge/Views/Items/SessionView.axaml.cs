@@ -1,3 +1,4 @@
+using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -11,16 +12,21 @@ public partial class SessionView : UserControl
     public SessionView()
     {
         InitializeComponent();
-        TabHeaders.Items.CollectionChanged += (_, _) => 
+        TabHeaders.Items.CollectionChanged += (_, _) =>
         {
-            // Start on Spring tab (index 1) so plots are immediately visible
-            if (TabHeaders.ItemCount > 1)
+            // Only set a default if no tab is currently selected
+            // (avoids double-selection when background tasks remove pages like BalancePage)
+            foreach (var item in TabHeaders.Items)
             {
-                (TabHeaders.Items[1] as PageViewModelBase)!.Selected = true;
+                if ((item as PageViewModelBase)?.Selected == true) return;
             }
-            else if (TabHeaders.ItemCount > 0)
+            // Existing sessions start on Summary (index 0); new/unsaved sessions on Spring (index 1)
+            var vm = DataContext as Sufni.Bridge.ViewModels.Items.SessionViewModel;
+            var defaultIndex = (vm?.IsInDatabase == true) ? 0 : 1;
+            var targetIndex = Math.Min(defaultIndex, TabHeaders.ItemCount - 1);
+            if (targetIndex >= 0)
             {
-                (TabHeaders.Items[0] as PageViewModelBase)!.Selected = true;
+                (TabHeaders.Items[targetIndex] as PageViewModelBase)!.Selected = true;
             }
         };
     }
