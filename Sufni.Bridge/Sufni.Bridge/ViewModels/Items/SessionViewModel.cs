@@ -25,7 +25,7 @@ namespace Sufni.Bridge.ViewModels.Items;
 public partial class SessionViewModel : ItemViewModelBase
 {
     // Increment when plot visuals change to force cache regeneration on all sessions.
-    private const int CurrentPlotVersion = 45;
+    private const int CurrentPlotVersion = 50;
 
     // Shared across all instances — updated whenever any session loads with real bounds.
     // Default matches iPhone 15 Pro logical width; height/2 is used for plots.
@@ -192,7 +192,23 @@ public partial class SessionViewModel : ItemViewModelBase
         var sessionCache = new SessionCache { SessionId = Id, PlotVersion = CurrentPlotVersion };
         var tasks = new List<Task>();
 
-        // Gruppe A: Spring comparison plots (Front+Rear)
+        // Shared VelocityBands tasks — computed once, used by both DamperPage UI and summary
+        Task<VelocityBands?> frontBandsTask = Task.FromResult<VelocityBands?>(null);
+        Task<VelocityBands?> rearBandsTask = Task.FromResult<VelocityBands?>(null);
+
+        if (telemetryData.Front.Present)
+        {
+            frontBandsTask = Task.Run(() =>
+                (VelocityBands?)telemetryData.CalculateVelocityBands(SuspensionType.Front, 200));
+        }
+
+        if (telemetryData.Rear.Present)
+        {
+            rearBandsTask = Task.Run(() =>
+                (VelocityBands?)telemetryData.CalculateVelocityBands(SuspensionType.Rear, 200));
+        }
+
+        // Spring comparison plots (Front+Rear)
         if (telemetryData.Front.Present && telemetryData.Rear.Present)
         {
             tasks.Add(Task.Run(() =>
@@ -202,7 +218,10 @@ public partial class SessionViewModel : ItemViewModelBase
                 sessionCache.TravelComparisonHistogram = tcmp.Plot.GetSvgXml(width, height);
                 var travelCompSrc = SvgToSource(sessionCache.TravelComparisonHistogram);
                 Dispatcher.UIThread.Post(() => { SpringPage.TravelComparisonHistogram = SourceToImage(travelCompSrc); });
+            }));
 
+            tasks.Add(Task.Run(() =>
+            {
                 var frs = new FrontRearTravelScatterPlot(new Plot());
                 frs.LoadTelemetryData(telemetryData);
                 sessionCache.FrontRearTravelScatter = frs.Plot.GetSvgXml(width, height);
@@ -219,7 +238,7 @@ public partial class SessionViewModel : ItemViewModelBase
             });
         }
 
-        // Gruppe B: Front travel + velocity
+        // Front plots — each in its own task
         if (telemetryData.Front.Present)
         {
             tasks.Add(Task.Run(() =>
@@ -229,20 +248,31 @@ public partial class SessionViewModel : ItemViewModelBase
                 sessionCache.FrontTravelHistogram = fth.Plot.GetSvgXml(width, height);
                 var frontTravelHistSrc = SvgToSource(sessionCache.FrontTravelHistogram);
                 Dispatcher.UIThread.Post(() => { SpringPage.FrontTravelHistogram = SourceToImage(frontTravelHistSrc); });
+            }));
 
+            tasks.Add(Task.Run(() =>
+            {
                 var fvh = new VelocityHistogramPlot(new Plot(), SuspensionType.Front);
                 fvh.LoadTelemetryData(telemetryData);
                 sessionCache.FrontVelocityHistogram = fvh.Plot.GetSvgXml(width, height);
                 var frontVelocityHistSrc = SvgToSource(sessionCache.FrontVelocityHistogram);
                 Dispatcher.UIThread.Post(() => { DamperPage.FrontVelocityHistogram = SourceToImage(frontVelocityHistSrc); });
+            }));
 
+            tasks.Add(Task.Run(() =>
+            {
                 var flsvh = new LowSpeedVelocityHistogramPlot(new Plot(), SuspensionType.Front);
                 flsvh.LoadTelemetryData(telemetryData);
                 sessionCache.FrontLowSpeedVelocityHistogram = flsvh.Plot.GetSvgXml(width, height);
                 var frontLsVelHistSrc = SvgToSource(sessionCache.FrontLowSpeedVelocityHistogram);
                 Dispatcher.UIThread.Post(() => { DamperPage.FrontLowSpeedVelocityHistogram = SourceToImage(frontLsVelHistSrc); });
+            }));
 
-                var fvb = telemetryData.CalculateVelocityBands(SuspensionType.Front, 200);
+            // Apply shared front VelocityBands to cache + UI
+            tasks.Add(frontBandsTask.ContinueWith(t =>
+            {
+                var fvb = t.Result;
+                if (fvb is null) return;
                 sessionCache.FrontHsrPercentage = fvb.HighSpeedRebound;
                 sessionCache.FrontLsrPercentage = fvb.LowSpeedRebound;
                 sessionCache.FrontLscPercentage = fvb.LowSpeedCompression;
@@ -254,10 +284,10 @@ public partial class SessionViewModel : ItemViewModelBase
                     DamperPage.FrontLscPercentage = fvb.LowSpeedCompression;
                     DamperPage.FrontHscPercentage = fvb.HighSpeedCompression;
                 });
-            }));
+            }, TaskScheduler.Default));
         }
 
-        // Gruppe C: Rear travel + velocity (parallel zu Gruppe B)
+        // Rear plots — each in its own task
         if (telemetryData.Rear.Present)
         {
             tasks.Add(Task.Run(() =>
@@ -267,20 +297,31 @@ public partial class SessionViewModel : ItemViewModelBase
                 sessionCache.RearTravelHistogram = rth.Plot.GetSvgXml(width, height);
                 var rearTravelHistSrc = SvgToSource(sessionCache.RearTravelHistogram);
                 Dispatcher.UIThread.Post(() => { SpringPage.RearTravelHistogram = SourceToImage(rearTravelHistSrc); });
+            }));
 
+            tasks.Add(Task.Run(() =>
+            {
                 var rvh = new VelocityHistogramPlot(new Plot(), SuspensionType.Rear);
                 rvh.LoadTelemetryData(telemetryData);
                 sessionCache.RearVelocityHistogram = rvh.Plot.GetSvgXml(width, height);
                 var rearVelocityHistSrc = SvgToSource(sessionCache.RearVelocityHistogram);
                 Dispatcher.UIThread.Post(() => { DamperPage.RearVelocityHistogram = SourceToImage(rearVelocityHistSrc); });
+            }));
 
+            tasks.Add(Task.Run(() =>
+            {
                 var rlsvh = new LowSpeedVelocityHistogramPlot(new Plot(), SuspensionType.Rear);
                 rlsvh.LoadTelemetryData(telemetryData);
                 sessionCache.RearLowSpeedVelocityHistogram = rlsvh.Plot.GetSvgXml(width, height);
                 var rearLsVelHistSrc = SvgToSource(sessionCache.RearLowSpeedVelocityHistogram);
                 Dispatcher.UIThread.Post(() => { DamperPage.RearLowSpeedVelocityHistogram = SourceToImage(rearLsVelHistSrc); });
+            }));
 
-                var rvb = telemetryData.CalculateVelocityBands(SuspensionType.Rear, 200);
+            // Apply shared rear VelocityBands to cache + UI
+            tasks.Add(rearBandsTask.ContinueWith(t =>
+            {
+                var rvb = t.Result;
+                if (rvb is null) return;
                 sessionCache.RearHsrPercentage = rvb.HighSpeedRebound;
                 sessionCache.RearLsrPercentage = rvb.LowSpeedRebound;
                 sessionCache.RearLscPercentage = rvb.LowSpeedCompression;
@@ -292,10 +333,10 @@ public partial class SessionViewModel : ItemViewModelBase
                     DamperPage.RearLscPercentage = rvb.LowSpeedCompression;
                     DamperPage.RearHscPercentage = rvb.HighSpeedCompression;
                 });
-            }));
+            }, TaskScheduler.Default));
         }
 
-        // Gruppe D: Balance plots (Front+Rear)
+        // Balance plots — each in its own task
         if (telemetryData.Front.Present && telemetryData.Rear.Present)
         {
             tasks.Add(Task.Run(() =>
@@ -305,13 +346,19 @@ public partial class SessionViewModel : ItemViewModelBase
                 sessionCache.CombinedBalance = combined.Plot.GetSvgXml(width, height);
                 var combinedBalanceSrc = SvgToSource(sessionCache.CombinedBalance);
                 Dispatcher.UIThread.Post(() => { BalancePage.CombinedBalance = SourceToImage(combinedBalanceSrc); });
+            }));
 
+            tasks.Add(Task.Run(() =>
+            {
                 var cb = new BalancePlot(new Plot(), BalanceType.Compression);
                 cb.LoadTelemetryData(telemetryData);
                 sessionCache.CompressionBalance = cb.Plot.GetSvgXml(width, height);
                 var compressionBalanceSrc = SvgToSource(sessionCache.CompressionBalance);
                 Dispatcher.UIThread.Post(() => { BalancePage.CompressionBalance = SourceToImage(compressionBalanceSrc); });
+            }));
 
+            tasks.Add(Task.Run(() =>
+            {
                 var rb = new BalancePlot(new Plot(), BalanceType.Rebound);
                 rb.LoadTelemetryData(telemetryData);
                 sessionCache.ReboundBalance = rb.Plot.GetSvgXml(width, height);
@@ -324,7 +371,7 @@ public partial class SessionViewModel : ItemViewModelBase
             Dispatcher.UIThread.Post(() => { Pages.Remove(BalancePage); });
         }
 
-        // Gruppe E: BYB Misc plots
+        // Misc plots — each in its own task
         tasks.Add(Task.Run(() =>
         {
             var vdc = new VelocityDistributionComparisonPlot(new Plot());
@@ -332,37 +379,49 @@ public partial class SessionViewModel : ItemViewModelBase
             sessionCache.VelocityDistributionComparison = vdc.Plot.GetSvgXml(width, height);
             var velDistCompSrc = SvgToSource(sessionCache.VelocityDistributionComparison);
             Dispatcher.UIThread.Post(() => { DamperPage.VelocityDistributionComparison = SourceToImage(velDistCompSrc); });
+        }));
 
+        tasks.Add(Task.Run(() =>
+        {
             var pvc = new PositionVelocityComparisonPlot(new Plot());
             pvc.LoadTelemetryData(telemetryData);
             sessionCache.PositionVelocityComparison = pvc.Plot.GetSvgXml(width, height);
             var posVelCompSrc = SvgToSource(sessionCache.PositionVelocityComparison);
             Dispatcher.UIThread.Post(() => { MiscPage.PositionVelocityComparison = SourceToImage(posVelCompSrc); });
+        }));
 
-            if (telemetryData.Front.Present)
+        if (telemetryData.Front.Present)
+        {
+            tasks.Add(Task.Run(() =>
             {
                 var fpv = new PositionVelocityPlot(new Plot(), SuspensionType.Front);
                 fpv.LoadTelemetryData(telemetryData);
                 sessionCache.FrontPositionVelocity = fpv.Plot.GetSvgXml(width, height);
                 var frontPosVelSrc = SvgToSource(sessionCache.FrontPositionVelocity);
                 Dispatcher.UIThread.Post(() => { MiscPage.FrontPositionVelocity = SourceToImage(frontPosVelSrc); });
-            }
+            }));
+        }
 
-            if (telemetryData.Rear.Present)
+        if (telemetryData.Rear.Present)
+        {
+            tasks.Add(Task.Run(() =>
             {
                 var rpv = new PositionVelocityPlot(new Plot(), SuspensionType.Rear);
                 rpv.LoadTelemetryData(telemetryData);
                 sessionCache.RearPositionVelocity = rpv.Plot.GetSvgXml(width, height);
                 var rearPosVelSrc = SvgToSource(sessionCache.RearPositionVelocity);
                 Dispatcher.UIThread.Post(() => { MiscPage.RearPositionVelocity = SourceToImage(rearPosVelSrc); });
-            }
+            }));
+        }
+
+        // Summary runs concurrently with all plots (reuses shared VelocityBands tasks)
+        tasks.Add(Task.Run(async () =>
+        {
+            var summaryData = await PopulateSummary(telemetryData, frontBandsTask, rearBandsTask);
+            sessionCache.SummaryJson = JsonSerializer.Serialize(summaryData);
         }));
 
         await Task.WhenAll(tasks);
-
-        // Populate summary using already-loaded telemetryData (no extra DB call)
-        var summaryData = await PopulateSummary(telemetryData);
-        sessionCache.SummaryJson = JsonSerializer.Serialize(summaryData);
 
         await databaseService.PutSessionCacheAsync(sessionCache);
     }
@@ -521,18 +580,22 @@ public partial class SessionViewModel : ItemViewModelBase
             forkVelocity[i] = wheelVelocity[i] * invCoeff;
         }
 
+        var compSamples = telemetryData.Front.Strokes.Compressions.Sum(s => s.Stat.Count);
+        var rebSamples = telemetryData.Front.Strokes.Rebounds.Sum(s => s.Stat.Count);
+        var totalSamples = compSamples + rebSamples;
+
         double travelSum = 0.0;
         var travelCount = 0;
         double travelMax = 0.0;
-        var travelValues = new List<double>();
+        var travelValues = new List<double>(totalSamples);
         double compressionSum = 0.0;
         var compressionCount = 0;
         double compressionMax = 0.0;
-        var compressionVels = new List<double>();
+        var compressionVels = new List<double>(compSamples);
         double reboundSum = 0.0;
         var reboundCount = 0;
         double reboundMax = 0.0;
-        var reboundVels = new List<double>();
+        var reboundVels = new List<double>(rebSamples);
 
         foreach (var stroke in telemetryData.Front.Strokes.Compressions.Concat(telemetryData.Front.Strokes.Rebounds))
         {
@@ -608,26 +671,30 @@ public partial class SessionViewModel : ItemViewModelBase
         var shockTravel = new double[rearTravel.Length];
         var shockVelocity = new double[rearVelocity.Length];
 
-        for (var i = 0; i < rearTravel.Length; i++)
+        Parallel.For(0, rearTravel.Length, i =>
         {
             var s = SolveShockTravel(rearTravel[i], coeffs, maxShockStroke);
             shockTravel[i] = s;
             var derivative = EvaluateDerivative(coeffs, s);
             shockVelocity[i] = Math.Abs(derivative) > 1e-6 ? rearVelocity[i] / derivative : 0.0;
-        }
+        });
+
+        var compSamples = telemetryData.Rear.Strokes.Compressions.Sum(s => s.Stat.Count);
+        var rebSamples = telemetryData.Rear.Strokes.Rebounds.Sum(s => s.Stat.Count);
+        var totalSamples = compSamples + rebSamples;
 
         double travelSum = 0.0;
         var travelCount = 0;
         double travelMax = 0.0;
-        var travelValues = new List<double>();
+        var travelValues = new List<double>(totalSamples);
         double compressionSum = 0.0;
         var compressionCount = 0;
         double compressionMax = 0.0;
-        var compressionVels = new List<double>();
+        var compressionVels = new List<double>(compSamples);
         double reboundSum = 0.0;
         var reboundCount = 0;
         double reboundMax = 0.0;
-        var reboundVels = new List<double>();
+        var reboundVels = new List<double>(rebSamples);
 
         foreach (var stroke in telemetryData.Rear.Strokes.Compressions.Concat(telemetryData.Rear.Strokes.Rebounds))
         {
@@ -708,7 +775,15 @@ public partial class SessionViewModel : ItemViewModelBase
             reboundVels.Count > 0 ? -reboundVels.Percentile(95) : 0.0);
     }
 
-    private async Task<CachedSummaryData> PopulateSummary(TelemetryData telemetryData)
+    private Task<CachedSummaryData> PopulateSummary(TelemetryData telemetryData) =>
+        PopulateSummary(telemetryData,
+            Task.FromResult(telemetryData.Front.Present ? (VelocityBands?)telemetryData.CalculateVelocityBands(SuspensionType.Front, 200) : null),
+            Task.FromResult(telemetryData.Rear.Present ? (VelocityBands?)telemetryData.CalculateVelocityBands(SuspensionType.Rear, 200) : null));
+
+    private async Task<CachedSummaryData> PopulateSummary(
+        TelemetryData telemetryData,
+        Task<VelocityBands?> frontBandsTask,
+        Task<VelocityBands?> rearBandsTask)
     {
         var date = (Timestamp ?? DateTime.UnixEpoch).ToString("yyyy-MM-dd");
         var time = (Timestamp ?? DateTime.UnixEpoch).ToString("HH:mm");
@@ -720,20 +795,11 @@ public partial class SessionViewModel : ItemViewModelBase
             ? duration.ToString(@"h\:mm\:ss")
             : duration.ToString(@"m\:ss");
 
-        SummaryPage.RunDataRows =
-        [
-            new SummaryValueRow("Date", date),
-            new SummaryValueRow("Time", time),
-            new SummaryValueRow("Run duration", $"{runDuration} s")
-        ];
-
         // Run the independent (read-only) computations in parallel
         var forkStatsTask = Task.Run(() => BuildForkStats(telemetryData));
         var frontWheelStatsTask = Task.Run(() => BuildWheelStats(telemetryData, SuspensionType.Front));
         var shockStatsTask = Task.Run(() => BuildShockStats(telemetryData));
         var rearWheelStatsTask = Task.Run(() => BuildWheelStats(telemetryData, SuspensionType.Rear));
-        var frontBandsTask = Task.Run(() => telemetryData.Front.Present ? telemetryData.CalculateVelocityBands(SuspensionType.Front, 200) : (VelocityBands?)null);
-        var rearBandsTask = Task.Run(() => telemetryData.Rear.Present ? telemetryData.CalculateVelocityBands(SuspensionType.Rear, 200) : (VelocityBands?)null);
         await Task.WhenAll(forkStatsTask, frontWheelStatsTask, shockStatsTask, rearWheelStatsTask, frontBandsTask, rearBandsTask);
 
         var forkStats = forkStatsTask.Result;
@@ -743,7 +809,14 @@ public partial class SessionViewModel : ItemViewModelBase
         var frontBands = frontBandsTask.Result;
         var rearBands = rearBandsTask.Result;
 
-        SummaryPage.ForkShockRows =
+        var runDataRows = new ObservableCollection<SummaryValueRow>(
+        [
+            new SummaryValueRow("Date", date),
+            new SummaryValueRow("Time", time),
+            new SummaryValueRow("Run duration", $"{runDuration} s")
+        ]);
+
+        var forkShockRows = new ObservableCollection<SummaryComparisonRow>(
         [
             new SummaryComparisonRow("Pos [AVG]",
                 forkStats is null ? "-" : FormatTravel(forkStats.AvgTravel, telemetryData.Linkage.MaxFrontStroke ?? 0),
@@ -775,9 +848,9 @@ public partial class SessionViewModel : ItemViewModelBase
             new SummaryComparisonRow("Reb [MAX]",
                 forkStats is null ? "-" : FormatVelocity(forkStats.MaxRebound),
                 shockStats is null ? "-" : FormatVelocity(shockStats.MaxRebound))
-        ];
+        ]);
 
-        SummaryPage.WheelRows =
+        var wheelRows = new ObservableCollection<SummaryComparisonRow>(
         [
             new SummaryComparisonRow("Pos [AVG]",
                 frontWheelStats is null ? "-" : FormatTravel(frontWheelStats.AvgTravel, telemetryData.Linkage.MaxFrontTravel),
@@ -821,12 +894,19 @@ public partial class SessionViewModel : ItemViewModelBase
             new SummaryComparisonRow("HSC [%]",
                 frontBands is null ? "-" : FormatPercent(frontBands.HighSpeedCompression),
                 rearBands is null ? "-" : FormatPercent(rearBands.HighSpeedCompression))
-        ];
+        ]);
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            SummaryPage.RunDataRows = runDataRows;
+            SummaryPage.ForkShockRows = forkShockRows;
+            SummaryPage.WheelRows = wheelRows;
+        });
 
         return new CachedSummaryData(
-            SummaryPage.RunDataRows.Select(r => new[] { r.Label, r.Value }).ToArray(),
-            SummaryPage.ForkShockRows.Select(r => new[] { r.Label, r.LeftValue, r.RightValue }).ToArray(),
-            SummaryPage.WheelRows.Select(r => new[] { r.Label, r.LeftValue, r.RightValue }).ToArray());
+            runDataRows.Select(r => new[] { r.Label, r.Value }).ToArray(),
+            forkShockRows.Select(r => new[] { r.Label, r.LeftValue, r.RightValue }).ToArray(),
+            wheelRows.Select(r => new[] { r.Label, r.LeftValue, r.RightValue }).ToArray());
     }
 
     #endregion

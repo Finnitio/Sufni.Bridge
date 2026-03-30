@@ -60,13 +60,45 @@ public class CompareTravelHistogramPlot(Plot plot, SuspensionType type) : SufniP
         var yRangeTop = Math.Max(1.0, globalMaxTime) * HistogramRangeMultiplier;
         Plot.Axes.SetLimits(left: 0, right: globalMaxTravel, bottom: 0, top: yRangeTop);
 
-        // Legend: session names in their colors
-        var legendY = yRangeTop * 0.95;
+        // Stat lines: avg, 95th, max per session
+        var labelYBase = yRangeTop * 0.92;
+        var labelYStep = yRangeTop * 0.08;
+        for (var i = 0; i < sessions.Count; i++)
+        {
+            var (data, color, _, _) = sessions[i];
+            var suspension = type == SuspensionType.Front ? data.Front : data.Rear;
+            if (!suspension.Present) continue;
+
+            var stats = data.CalculateDetailedTravelStatistics(type);
+            Plot.Add.VerticalLine(stats.Average, 2f, color, LinePattern.Dashed);
+            Plot.Add.VerticalLine(stats.P95, 2f, color, LinePattern.Dashed);
+            Plot.Add.VerticalLine(stats.Max, 2f, color, LinePattern.Dashed);
+
+            var labelY = labelYBase - i * labelYStep;
+            void AddLabel(string text, double x)
+            {
+                var t = Plot.Add.Text(text, x, labelY);
+                t.LabelFontColor = color;
+                t.LabelFontSize = 11;
+                t.LabelAlignment = Alignment.LowerCenter;
+                t.LabelRotation = -90;
+                t.LabelOffsetX = 0;
+                t.LabelOffsetY = 4;
+            }
+
+            AddLabel("avg", stats.Average);
+            AddLabel("95th", stats.P95);
+            AddLabel("max", stats.Max);
+        }
+
+        // Legend: session names in their colors, centered on right edge
+        var legendCenter = yRangeTop * 0.50;
         var legendStep = yRangeTop * 0.08;
+        var legendTop = legendCenter + (sessions.Count - 1) / 2.0 * legendStep;
         for (var i = 0; i < sessions.Count; i++)
         {
             var (_, color, _, name) = sessions[i];
-            var label = Plot.Add.Text(name, globalMaxTravel, legendY - i * legendStep);
+            var label = Plot.Add.Text(name, globalMaxTravel, legendTop - i * legendStep);
             label.LabelFontColor = color;
             label.LabelFontSize = 12;
             label.LabelAlignment = Alignment.UpperRight;

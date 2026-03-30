@@ -39,6 +39,9 @@ public partial class SessionListViewModel : ItemListViewModelBase
     // Track which setup IDs are currently allowed (null = no filter active / all)
     private HashSet<Guid?>? _allowedSetupIds;
 
+    // Remember previously selected session IDs across compare mode toggles
+    private readonly HashSet<Guid> _lastCompareSelection = [];
+
     public override void ConnectSource()
     {
         Source.Connect()
@@ -161,12 +164,29 @@ public partial class SessionListViewModel : ItemListViewModelBase
         IsCompareMode = !IsCompareMode;
         if (!IsCompareMode)
         {
-            // Clear all selections when exiting compare mode
+            // Save selection and clear UI state
+            _lastCompareSelection.Clear();
             foreach (var item in Items)
             {
+                if (item.IsSelectedForCompare)
+                    _lastCompareSelection.Add(item.Id);
                 item.IsSelectedForCompare = false;
             }
             CompareSelectionCount = 0;
+        }
+        else
+        {
+            // Restore previous selection
+            var count = 0;
+            foreach (var item in Items)
+            {
+                if (_lastCompareSelection.Contains(item.Id))
+                {
+                    item.IsSelectedForCompare = true;
+                    count++;
+                }
+            }
+            CompareSelectionCount = count;
         }
     }
 
@@ -195,13 +215,18 @@ public partial class SessionListViewModel : ItemListViewModelBase
 
         if (selected.Count < 2) return;
 
+        // Remember selection for next time
+        _lastCompareSelection.Clear();
+        foreach (var item in selected)
+            _lastCompareSelection.Add(item.Id);
+
         var mainViewModel = App.Current?.Services?.GetService<MainViewModel>();
         Debug.Assert(mainViewModel != null, nameof(mainViewModel) + " != null");
 
         var compareVm = new CompareSessionsViewModel(selected);
         mainViewModel.OpenView(compareVm);
 
-        // Reset compare mode
+        // Reset compare mode UI
         IsCompareMode = false;
         foreach (var item in Items)
         {

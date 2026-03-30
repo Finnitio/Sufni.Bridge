@@ -592,16 +592,17 @@ public class TelemetryData
     {
         var suspension = type == SuspensionType.Front ? Front : Rear;
         var step = suspension.VelocityBins[1] - suspension.VelocityBins[0];
-        var velocity = suspension.Velocity.ToList();
 
-        var strokeVelocity = new List<double>();
+        var totalSamples = suspension.Strokes.Compressions.Sum(s => s.Stat.Count)
+                         + suspension.Strokes.Rebounds.Sum(s => s.Stat.Count);
+        var strokeVelocity = new List<double>(totalSamples);
         foreach (var s in suspension.Strokes.Compressions)
         {
-            strokeVelocity.AddRange(velocity.GetRange(s.Start, s.End - s.Start + 1));
+            for (var i = s.Start; i <= s.End; i++) strokeVelocity.Add(suspension.Velocity[i]);
         }
         foreach (var s in suspension.Strokes.Rebounds)
         {
-            strokeVelocity.AddRange(velocity.GetRange(s.Start, s.End - s.Start + 1));
+            for (var i = s.Start; i <= s.End; i++) strokeVelocity.Add(suspension.Velocity[i]);
         }
 
         var mu = strokeVelocity.Mean();
@@ -634,16 +635,17 @@ public class TelemetryData
     {
         var suspension = type == SuspensionType.Front ? Front : Rear;
         var fineStep = suspension.FineVelocityBins[1] - suspension.FineVelocityBins[0];
-        var velocity = suspension.Velocity.ToList();
 
-        var strokeVelocity = new List<double>();
+        var totalSamples = suspension.Strokes.Compressions.Sum(s => s.Stat.Count)
+                         + suspension.Strokes.Rebounds.Sum(s => s.Stat.Count);
+        var strokeVelocity = new List<double>(totalSamples);
         foreach (var s in suspension.Strokes.Compressions)
         {
-            strokeVelocity.AddRange(velocity.GetRange(s.Start, s.End - s.Start + 1));
+            for (var i = s.Start; i <= s.End; i++) strokeVelocity.Add(suspension.Velocity[i]);
         }
         foreach (var s in suspension.Strokes.Rebounds)
         {
-            strokeVelocity.AddRange(velocity.GetRange(s.Start, s.End - s.Start + 1));
+            for (var i = s.Start; i <= s.End; i++) strokeVelocity.Add(suspension.Velocity[i]);
         }
 
         var mu = strokeVelocity.Mean();

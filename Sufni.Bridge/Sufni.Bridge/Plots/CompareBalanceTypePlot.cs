@@ -74,9 +74,10 @@ public class CompareBalanceTypePlot(Plot plot, BalanceType type) : SufniPlot(plo
 
         // Legend in lower-right corner
         var legendStep = Math.Abs(roundedMaxVelocity * 0.08);
+        // Position legend at the bottom of the plot (near Y=0 for both types)
         var legendBase = type == BalanceType.Compression
-            ? legendStep * (sessions.Count + 1)
-            : -legendStep * (sessions.Count + 1);
+            ? legendStep
+            : -legendStep;
 
         // Combined front/rear hint line above session names
         var hintY = type == BalanceType.Compression

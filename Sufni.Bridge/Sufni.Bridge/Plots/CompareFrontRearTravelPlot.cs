@@ -62,7 +62,7 @@ public class CompareFrontRearTravelPlot(Plot plot) : SufniPlot(plot)
         foreach (var (color, name, slope) in slopeData)
         {
             var colorHex = $"#{color.R:X2}{color.G:X2}{color.B:X2}";
-            AddLabel($"{name}  a={slope:0.00}", 100, 0, -10, labelYOffset, Alignment.LowerRight, colorHex);
+            AddLabel($"{name}, a={slope:0.00}", 100, 0, -10, labelYOffset, Alignment.LowerRight, colorHex);
             labelYOffset += 18;
         }
 
